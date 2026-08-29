@@ -123,5 +123,27 @@ Two consequences of this follow directly:
 |------|------|----------------|
 | `#3` | `Unauthorized` | Caller is not the stored admin |
 | `#7` | `WrapNotFound` | No wrap record exists for `(user, period)` |
+| `#12` | `Paused` | Contract is paused; `revoke_wrap` and `burn_wrap` are blocked |
 
 See [ERRORS.md](../ERRORS.md) for the full error catalogue.
+
+---
+
+## Pause behavior
+
+Both `revoke_wrap` and `burn_wrap` are **blocked while the contract is
+paused**. Each entrypoint calls `require_not_paused()` as its first
+operation, before any authorization or storage access. Any attempt to
+delete a wrap record while paused fails immediately with
+`ContractError::Paused` (`Error(Contract, #12)`).
+
+**Rationale.** The pause mechanism is an emergency stop. During an incident
+the primary goal is to preserve the current on-chain state so that
+investigators can reconstruct exactly what happened. Permitting deletion of
+wrap records — whether by the owner (`burn_wrap`) or the admin
+(`revoke_wrap`) — would destroy evidence irreversibly. If revocation is
+genuinely required during a paused state (e.g. to correct a critical
+backend error discovered as part of the incident), the admin should
+**unpause first**, perform the revocation, then re-pause. This adds a
+small amount of friction in exchange for a significant increase in
+forensic integrity.

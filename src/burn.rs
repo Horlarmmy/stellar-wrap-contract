@@ -1,5 +1,6 @@
 use soroban_sdk::{panic_with_error, symbol_short, Address, Env};
 
+use crate::admin;
 use crate::{ContractError, DataKey};
 
 /// Burns (permanently deletes) a wrap record owned by the caller.
@@ -27,6 +28,9 @@ use crate::{ContractError, DataKey};
 /// Once burned, the wrap_id is freed and the record cannot be recovered.
 /// The user can later mint a new wrap for the same period if desired.
 pub(crate) fn burn_wrap(e: Env, user: Address, period: u64) {
+    // 0. Reject calls while the contract is paused
+    admin::require_not_paused(&e);
+
     // 1. Require auth FIRST — verify caller is the owner
     user.require_auth();
 

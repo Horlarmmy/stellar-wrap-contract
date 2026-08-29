@@ -1570,6 +1570,81 @@ fn test_burn_wrap_multiple_users_independent() {
     assert!(client.get_wrap(&user_b, &period).is_some());
 }
 
+// ─── Pause interaction ──────────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_burn_wrap_when_paused_fails() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, StellarWrapContract);
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let signing_key = SigningKey::from_bytes(&[28u8; 32]);
+    let admin_pubkey = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize(&admin, &admin_pubkey);
+    env.mock_all_auths();
+
+    let hash = BytesN::from_array(&env, &[42u8; 32]);
+    let archetype = symbol_short!("arch");
+    let period = 202401u64;
+
+    let sig = sign_payload(
+        &env,
+        &signing_key,
+        &contract_id,
+        &user,
+        period,
+        &archetype,
+        &hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &hash, &1u32, &sig);
+
+    // Pause the contract, then try to burn.
+    client.pause();
+    client.burn_wrap(&user, &period);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_revoke_wrap_when_paused_fails() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, StellarWrapContract);
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let signing_key = SigningKey::from_bytes(&[29u8; 32]);
+    let admin_pubkey = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize(&admin, &admin_pubkey);
+    env.mock_all_auths();
+
+    let hash = BytesN::from_array(&env, &[42u8; 32]);
+    let archetype = symbol_short!("arch");
+    let period = 202401u64;
+
+    let sig = sign_payload(
+        &env,
+        &signing_key,
+        &contract_id,
+        &user,
+        period,
+        &archetype,
+        &hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &hash, &1u32, &sig);
+
+    // Pause the contract, then try to revoke.
+    client.pause();
+    let reason_hash = BytesN::from_array(&env, &[0u8; 32]);
+    client.revoke_wrap(&user, &period, &reason_hash);
+}
+
 // ============================================================================
 // get_all_wraps_for_user tests
 // ============================================================================

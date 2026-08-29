@@ -1,5 +1,6 @@
 use soroban_sdk::{panic_with_error, symbol_short, Address, BytesN, Env};
 
+use crate::admin;
 use crate::storage_accounting;
 use crate::{ContractError, DataKey};
 
@@ -24,6 +25,9 @@ use crate::{ContractError, DataKey};
 /// - If no reason is provided (all-zero hash), the event still emits for
 ///   transparency, but without a link to off-chain evidence.
 pub(crate) fn revoke_wrap(e: Env, user: Address, period: u64, reason_hash: BytesN<32>) {
+    // Reject calls while the contract is paused
+    admin::require_not_paused(&e);
+
     let admin: Address = e
         .storage()
         .instance()
