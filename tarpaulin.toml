@@ -40,6 +40,3 @@ exclude-files = [
     "src/prop_test.rs",
     "src/constants.rs",
 ]
-
-# Avoid instrumenting generated code inside the target directory.
-exclude = ["target/*"]
