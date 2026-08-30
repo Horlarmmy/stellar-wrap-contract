@@ -24,6 +24,7 @@ use crate::{ContractError, DataKey};
 ///   auditors can recompute the hash and confirm it matches the on-chain value.
 /// - If no reason is provided (all-zero hash), the event still emits for
 ///   transparency, but without a link to off-chain evidence.
+#[allow(deprecated)] // TODO(#718): migrate to #[contractevent]
 pub(crate) fn revoke_wrap(e: Env, user: Address, period: u64, reason_hash: BytesN<32>) {
     // Reject calls while the contract is paused
     admin::require_not_paused(&e);
