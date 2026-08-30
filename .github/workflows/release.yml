@@ -13,6 +13,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Tag version: $TAG_VERSION"
+
+          CARGO_VERSION=$(cargo metadata --no-deps --format-version=1 \
+            | jq -r '.packages[0].version')
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          CHANGELOG_VERSION=$(grep -m1 -oP '^## \K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          echo "CHANGELOG version: $CHANGELOG_VERSION"
+
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml ($CARGO_VERSION)"
+            exit 1
+          fi
+
+          if [ "$TAG_VERSION" != "$CHANGELOG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match CHANGELOG.md ($CHANGELOG_VERSION)"
+            exit 1
+          fi
+
+          echo "All versions match: $TAG_VERSION"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

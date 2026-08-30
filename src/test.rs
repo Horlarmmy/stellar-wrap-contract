@@ -2520,4 +2520,14 @@ fn test_update_latest_period_option_storage_accounting() {
     assert_eq!(unchanged_period, Some(10));
 }
 
+#[test]
+fn test_version() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
 
+    assert_eq!(
+        client.version(),
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
+    );
+}
