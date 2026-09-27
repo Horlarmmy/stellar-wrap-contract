@@ -44,6 +44,35 @@ jobs:
     - name: Clean test snapshots
       run: rm -rf test_snapshots/
 
+  fuzz:
+    runs-on: ubuntu-latest
+    # Fuzz targets are exercised on a schedule (see the `schedule` trigger)
+    # and on demand, not on every push/PR, so a long-running fuzz session
+    # never blocks the fast feedback loop.  Any crash it finds is committed
+    # as a regression unit test under the owning crate's `tests/` directory.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+    - uses: actions/checkout@v5
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Install cargo-fuzz
+      uses: taiki-e/install-action@cargo-fuzz
+    - name: Fuzz bridge_wrap_in
+      run: cargo fuzz run fuzz_bridge_wrap_in -- -max_total_time=300
+    - name: Fuzz bridge_wrap_refund
+      run: cargo fuzz run fuzz_bridge_wrap_refund -- -max_total_time=300
+    - name: Fuzz merkle proof verification
+      run: cargo fuzz run fuzz_merkle_proof -- -max_total_time=300
+    - name: Fuzz signature payload decoder
+      run: cargo fuzz run fuzz_signature_payload -- -max_total_time=300
+    - name: Upload crashing inputs as regression artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fuzz-crashes
+        path: fuzz/artifacts/
+        retention-days: 30
+
   coverage:
     runs-on: ubuntu-latest
     # RUSTFLAGS intentionally avoids -D warnings but enables overflow-checks.
