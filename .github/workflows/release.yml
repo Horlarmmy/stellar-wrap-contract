@@ -6,7 +6,45 @@ on:
       - 'v*.*.*'
 
 jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      blocking: ${{ steps.check.outputs.blocking }}
+    steps:
+      - name: Check for open security-labelled issues
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          COUNT=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label security \
+            --state open \
+            --limit 100 \
+            --json number \
+            --jq 'length')
+          echo "Open security-labelled issues: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "blocking=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Release blocked: $COUNT open security-labelled issue(s). See SECURITY_AUDIT_CHECKLIST.md blocking findings."
+            gh issue list \
+              --repo "${{ github.repository }}" \
+              --label security \
+              --state open \
+              --limit 100 \
+              --json number,title \
+              --jq '.[] | "#\(.number) \(.title)"'
+          else
+            echo "blocking=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: security-gate
+    if: needs.security-gate.outputs.blocking == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
