@@ -112,11 +112,62 @@ design and are not represented by a `TimelockAction` variant.
 The **No** entries are an explicit scope decision: they remain admin-only, but
 the current closed `TimelockAction` enum provides no delayed operation for them.
 
-DAO governance is also subject to the delay. When the timelock is disabled, a
-passing `execute_admin_proposal` updates the admin immediately. When it is
-enabled, the current admin must authorize proposal execution, and the passing
-proposal queues `TimelockAction::SetAdmin`; the admin remains unchanged until
-that queued operation reaches its ETA and is executed.
+## Governance and timelock interaction
+
+Governance (`execute_admin_proposal`) and the timelock are two overlapping
+paths to the same privileged action — changing the admin. Their interaction is
+specified here and covered by tests in
+[`src/tests/governance_timelock.rs`](../src/tests/governance_timelock.rs).
+
+### Does a governance proposal execute immediately?
+
+It depends on whether the timelock is enabled, and this is explicit in code:
+
+- **Timelock disabled** (`TimelockDelay` absent): a passing proposal executes
+  immediately. `execute_admin_proposal` sets `Admin` in the same transaction.
+- **Timelock enabled** (`TimelockDelay` present): a passing proposal does **not**
+  execute immediately. The current admin must authorize execution, and the
+  passing proposal queues `TimelockAction::SetAdmin`; the admin remains
+  unchanged until that queued operation reaches its ETA and is executed via
+  `timelock_execute`.
+
+So governance never bypasses the timelock: when the timelock is on, the
+proposal's effect is routed through the same delay as a direct admin handover.
+
+### Can a timelocked action change the admin while a proposal is open?
+
+Yes, and it is not a bypass. A `SetAdmin` scheduled through the timelock is an
+independent, admin-authorized operation. If it executes while a governance
+proposal to change the admin is still open, it simply replaces `Admin` and
+clears any `PendingAdmin`; the open proposal is then evaluated against the new
+admin. Both paths require the current admin's authorization, so neither can
+silently override the other without the admin's involvement.
+
+### Can governance schedule, cancel, or shorten a timelocked action?
+
+No. Governance has no entrypoint that touches the timelock queue:
+
+- **Schedule** — only `timelock_schedule` (admin-only) queues operations.
+  `execute_admin_proposal` may *cause* a `SetAdmin` to be queued when the
+  timelock is enabled, but it cannot schedule arbitrary actions.
+- **Cancel** — only `timelock_cancel` (admin-only) removes a queued operation.
+- **Shorten** — the delay can only be changed by
+  `TimelockAction::SetTimelockDelay`, which is itself a timelocked action and is
+  bounded to `MIN_DELAY` … `MAX_DELAY`. Governance cannot shorten it.
+
+### No path bypasses both mechanisms
+
+Every privileged action is reachable only through one of two doors, and both
+require the current admin:
+
+- Direct admin entrypoints marked **Yes** reject calls with `TimelockRequired`
+  once the timelock is enabled, so they must go through
+  `timelock_schedule` + `timelock_execute`.
+- `execute_admin_proposal` requires the current admin's authorization and, when
+  the timelock is enabled, routes its effect through the timelock.
+
+There is no entrypoint that reaches a privileged action without either the
+timelock (when enabled) or the admin's authorization, so no path bypasses both.
 
 ## Guarantees and caveats
 
@@ -162,8 +213,7 @@ timelock_cancel --id <id>
 | 17 | `TimelockNotReady` | ETA not reached. |
 | 18 | `TimelockOperationNotFound` | Unknown or already-executed id. |
 | 19 | `TimelockOperationExists` | Identical action already queued. |
-| 20 | `InvalidTimelockDelay` | Delay out of bounds, or timelock not enabled. |
-| 21 | `TimelockRequired` | Direct admin call attempted while enabled. |
+| 20 | `InvalidTimelockDelay` | Delay out of bounds, or not enabled. |
+| 21 | `TimelockRequired` | Direct call to a timelocked entrypoint. |
 | 22 | `TimelockAlreadyEnabled` | `enable_timelock` called twice. |
-| 23 | `TimelockOperationExpired` | Operation past ETA + GRACE_PERIOD. |
-| 24 | `TimelockOperationNotExpired` | Sweep attempted before grace period elapsed. |
+| 23 | `TimelockExpired` | Operation past `eta + GRACE_PERIOD`. |

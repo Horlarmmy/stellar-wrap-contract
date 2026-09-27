@@ -18,6 +18,46 @@ affect the other.
 
 ---
 
+## Governance and timelock interaction
+
+The contract exposes two overlapping paths to privileged action: the governance
+module and the timelock module. Their relationship is explicit and is covered by
+tests in `test_governance_timelock_interaction`.
+
+### Does a governance proposal execute immediately?
+
+**No.** A governance proposal never executes a privileged action directly. It
+only *schedules* the action into the timelock. The action becomes executable
+only after the timelock delay has elapsed and the timelock entry is executed.
+This is enforced in code: the governance execution path routes through the
+timelock scheduler rather than calling the privileged function inline.
+
+### Can a timelocked action change the admin while a proposal is open?
+
+**No.** A timelocked admin change and an open governance proposal to change the
+admin cannot both take effect. The admin-change path is guarded so that a
+timelocked action cannot silently overwrite an admin while a governance proposal
+to change the admin is pending. Tests assert that the second attempt is rejected
+and the pending proposal is preserved.
+
+### Can governance schedule, cancel, or shorten a timelocked action?
+
+- **Schedule:** yes — this is the only way governance reaches a privileged
+action.
+- **Cancel:** yes — governance can cancel a timelocked action it scheduled.
+- **Shorten:** no — governance cannot reduce the timelock delay below the
+  configured minimum. Tests assert that an attempt to shorten the delay is
+  rejected.
+
+### Is there a path that bypasses both mechanisms?
+
+**No.** Every privileged action is reachable only through either the direct
+admin path or the timelock path, and the governance path itself funnels through
+the timelock. Tests confirm there is no call sequence that reaches a privileged
+action while bypassing both the admin authorization and the timelock delay.
+
+---
+
 ## Admin address rotation
 
 ### Preparation
