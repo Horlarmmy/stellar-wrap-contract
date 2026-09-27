@@ -37,6 +37,8 @@ jobs:
       run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
     - name: Run tests
       run: cargo test --workspace
+    - name: Check every error variant is reachable and tested
+      run: python3 scripts/check_error_variants.py
     - name: Track WASM size budget
       run: ./scripts/check_wasm_size.sh
     - name: Check README documents all entrypoints
