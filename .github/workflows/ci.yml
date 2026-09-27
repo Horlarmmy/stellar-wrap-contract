@@ -46,6 +46,67 @@ jobs:
     - name: Clean test snapshots
       run: rm -rf test_snapshots/
 
+  # Reproducible-build verification: build the same commit twice in two
+  # independent jobs and compare the resulting WASM SHA256 hashes.  Both
+  # jobs build inside the pinned Dockerfile so the toolchain and optimizer
+  # are identical to a third party's local build.
+  reproducible-build-a:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Build WASM in the pinned container
+      run: |
+        docker build -t wasm-build .
+        docker run --rm -v "$PWD/out-a:/out" wasm-build
+    - name: Upload WASM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wasm-a
+        path: out-a/*.wasm
+        retention-days: 1
+
+  reproducible-build-b:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Build WASM in the pinned container
+      run: |
+        docker build -t wasm-build .
+        docker run --rm -v "$PWD/out-b:/out" wasm-build
+    - name: Upload WASM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wasm-b
+        path: out-b/*.wasm
+        retention-days: 1
+
+  reproducible-build-verify:
+    runs-on: ubuntu-latest
+    needs: [reproducible-build-a, reproducible-build-b]
+    steps:
+    - name: Download build A
+      uses: actions/download-artifact@v4
+      with:
+        name: wasm-a
+        path: out-a
+    - name: Download build B
+      uses: actions/download-artifact@v4
+      with:
+        name: wasm-b
+        path: out-b
+    - name: Compare WASM hashes
+      run: |
+        set -euo pipefail
+        hash_a=$(sha256sum out-a/*.wasm | awk '{print $1}')
+        hash_b=$(sha256sum out-b/*.wasm | awk '{print $1}')
+        echo "build A: $hash_a"
+        echo "build B: $hash_b"
+        if [ "$hash_a" != "$hash_b" ]; then
+          echo "::error::WASM builds are not reproducible: $hash_a != $hash_b"
+          exit 1
+        fi
+        echo "WASM builds are reproducible: $hash_a"
+
   coverage:
     runs-on: ubuntu-latest
     # RUSTFLAGS intentionally avoids -D warnings but enables overflow-checks.
