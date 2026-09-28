@@ -4,10 +4,12 @@
 //! module owns the renewal helpers so the `lib.rs` facade stays a pure
 //! delegation layer.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
 use crate::admin;
+use crate::mint::MAX_BATCH_SIZE;
 use crate::storage_types::DataKey;
+use crate::ContractError;
 
 /// TVL (ledgers) applied to persistent entries (/1 year at 5s/ledger).
 const TTL_ONE_YEAR: u32 = 17_280 * 365;
@@ -42,17 +44,42 @@ const TTL_ONE_YEAR: u32 = 17_280 * 365;
 /// participating. Off-chain bots or the admin should call `extend_ttl` for
 /// historical periods of active users to prevent data loss.
 ///
+/// **Batch renewal (permissionless):** Because a user accumulates one wrap
+/// record per period, keeping N historical periods alive individually costs N
+/// transactions. [`extend_ttl_batch`] renews a bounded set of a user's periods
+/// in a single call so a renewal bot can cover a user in one transaction.
+///
+/// **No-op calls:** A call for a `(user, period)` pair with no stored record
+/// renews nothing, so it returns before touching the per-user metadata or the
+/// contract instance TTL. This prevents driving instance-rent writes with calls
+/// that accomplish nothing else (Issue #678).
+///
 /// #Parameters
 /// - `user`: The address whose storage entries will be extended.
 /// - `period`: The specific wrap period whose record TTL will be extended.
 pub(crate) fn extend_ttl(e: Env, user: Address, period: u64) {
     let wrap_key = DataKey::Wrap(user.clone(), period);
-    if e.storage().persistent().has(&wrap_key) {
-        e.storage()
-            .persistent()
-            .extend_ttl(&wrap_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
+
+    // Without a matching record there is nothing to renew. Return before any
+    // metadata or instance write so a permissionless caller cannot bump the
+    // contract instance TTL with a call that has no other effect (Issue #678).
+    if !e.storage().persistent().has(&wrap_key) {
+        return;
     }
 
+    e.storage()
+        .persistent()
+        .extend_ttl(&wrap_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
+
+    extend_user_metadata_ttl(&e, &user);
+    e.storage().instance().extend_ttl(TTL_ONE_YEAR, TTL_ONE_YEAR);
+}
+
+/// Renew the per-user metadata keys (`WrapCount`, `LatestPeriod`) when present.
+///
+/// Shared by [`extend_ttl`] and [`extend_ttl_batch`] so both entrypoints apply
+/// the same one-year window to the metadata the user's records depend on.
+fn extend_user_metadata_ttl(e: &Env, user: &Address) {
     let count_key = DataKey::WrapCount(user.clone());
     if e.storage().persistent().has(&count_key) {
         e.storage()
@@ -60,13 +87,68 @@ pub(crate) fn extend_ttl(e: Env, user: Address, period: u64) {
             .extend_ttl(&count_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
     }
 
-    let latest_key = DataKey::LatestPeriod(user);
+    let latest_key = DataKey::LatestPeriod(user.clone());
     if e.storage().persistent().has(&latest_key) {
         e.storage()
             .persistent()
             .extend_ttl(&latest_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
     }
+}
 
+/// Extend the TTL of several of a user's wrap records in a single call.
+///
+/// This is the batch form of [`extend_ttl`], aimed at the renewal-bot use case:
+/// keeping N historical periods alive individually costs N transactions, which
+/// is exactly the "expiry risk" the [`extend_ttl`] documentation warns about.
+/// One call renews up to [`MAX_BATCH_SIZE`] periods.
+///
+/// # Parameters
+/// - `user`: The address whose wrap record TTLs will be extended.
+/// - `periods`: The `(YYYYMM)` periods to renew, in any order. Periods with no
+///   stored record are skipped, so a single stale period does not fail the
+///   batch. Duplicates are harmless (renewing an entry twice is idempotent).
+///
+/// # TTL Lifecycle
+///
+/// Each matching wrap record is renewed by ~1 year, and the per-user metadata
+/// keys (`WrapCount`, `LatestPeriod`) plus the contract instance TTL are renewed
+/// once per call — not once per period. Like [`extend_ttl`], a batch that
+/// matches **no** records is a no-op and does not extend the instance TTL.
+///
+/// # Authorization
+/// Permissionless, exactly like [`extend_ttl`]: no `require_auth`, so a renewal
+/// bot needs no signing key.
+///
+/// # Panics
+/// - [`ContractError::BatchEmpty`] if `periods` is empty.
+/// - [`ContractError::BatchTooLarge`] if `periods` holds more than
+///   [`MAX_BATCH_SIZE`] entries.
+pub(crate) fn extend_ttl_batch(e: Env, user: Address, periods: Vec<u64>) {
+    if periods.is_empty() {
+        panic_with_error!(&e, ContractError::BatchEmpty);
+    }
+    if periods.len() > MAX_BATCH_SIZE {
+        panic_with_error!(&e, ContractError::BatchTooLarge);
+    }
+
+    let mut renewed_any = false;
+    for period in periods.iter() {
+        let wrap_key = DataKey::Wrap(user.clone(), period);
+        if e.storage().persistent().has(&wrap_key) {
+            e.storage()
+                .persistent()
+                .extend_ttl(&wrap_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
+            renewed_any = true;
+        }
+    }
+
+    // Mirror `extend_ttl`: a batch that matched nothing must not write the
+    // per-user metadata or the contract instance TTL (Issue #678).
+    if !renewed_any {
+        return;
+    }
+
+    extend_user_metadata_ttl(&e, &user);
     e.storage().instance().extend_ttl(TTL_ONE_YEAR, TTL_ONE_YEAR);
 }
 

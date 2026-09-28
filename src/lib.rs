@@ -385,6 +385,11 @@ impl StellarWrapContract {
     /// `(user, period)` pairs are **not** automatically extended on new mints.
     /// Anyone can call this `extend_ttl` function to renew a specific wrap record.
     ///
+    /// **Batch renewal (permissionless):** Because a user accumulates one wrap record
+    /// per period, renewing N historical periods individually costs N transactions.
+    /// [`Self::extend_ttl_batch`] renews a bounded set of a user's periods in a single
+    /// call so a renewal bot can cover a user in one transaction.
+    ///
     /// **Bulk renewal (admin):** The `renew_all_ttls` function allows the admin to
     /// extend the TTL of all metadata keys for a user. Full wrap-enumeration renewal
     /// requires period tracking (see Issue #90).
@@ -393,6 +398,11 @@ impl StellarWrapContract {
     /// user could expire after ~1 year, even though the user is still participating.
     /// Off-chain bots or the admin should call `extend_ttl` for historical periods
     /// of active users to prevent data loss.
+    ///
+    /// **No-op calls:** A call for a `(user, period)` pair with no stored record renews
+    /// nothing, so it returns before touching the per-user metadata or the contract
+    /// instance TTL; a permissionless caller cannot drive instance-rent writes with a
+    /// call that accomplishes nothing else (Issue #678).
     ///
     /// # Parameters
     /// - `user`: The address whose storage entries will be extended.
@@ -411,6 +421,40 @@ impl StellarWrapContract {
     /// call's own resource fee.
     pub fn extend_ttl(e: Env, user: Address, period: u64) {
         ttl::extend_ttl(e, user, period);
+    }
+
+    /// Extend the TTL (time-to-live) for several of a user's wrap records in one call.
+    ///
+    /// This is the batch form of [`Self::extend_ttl`], intended for off-chain renewal
+    /// bots. Keeping N historical periods alive individually costs N transactions,
+    /// which is the "expiry risk" described in the TTL lifecycle; this entrypoint
+    /// covers a user's history in a single transaction.
+    ///
+    /// # TTL Lifecycle
+    ///
+    /// Follows the lifecycle documented on [`Self::extend_ttl`]: persistent entries
+    /// are stored with a ~1 year TTL, `mint_wrap` refreshes only the per-user metadata,
+    /// and historical records must be renewed explicitly. Each matching record in the
+    /// batch receives the same ~1 year window. The per-user metadata keys
+    /// (`WrapCount`, `LatestPeriod`) and the contract instance TTL are renewed once per
+    /// call rather than once per period.
+    ///
+    /// # Parameters
+    /// - `user`: The address whose wrap record TTLs will be extended.
+    /// - `periods`: The `YYYYMM` periods to renew, in any order. Periods with no stored
+    ///   record are skipped, so one stale period does not fail the whole batch.
+    ///
+    /// # Errors
+    /// - [`ContractError::BatchEmpty`] if `periods` is empty.
+    /// - [`ContractError::BatchTooLarge`] if more than `MAX_BATCH_SIZE` periods are
+    ///   supplied.
+    ///
+    /// # Security
+    /// Permissionless like [`Self::extend_ttl`] — no `require_auth`, so renewal bots
+    /// need no signing key. A batch that matches no records is a no-op and does not
+    /// extend the instance TTL (Issue #678).
+    pub fn extend_ttl_batch(e: Env, user: Address, periods: Vec<u64>) {
+        ttl::extend_ttl_batch(e, user, periods);
     }
 
     /// Admin-only function to extend TTL for all metadata keys associated with a user.
