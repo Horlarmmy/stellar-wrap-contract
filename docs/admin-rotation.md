@@ -214,3 +214,14 @@ admin loses access.
 
 For mainnet rotations, always rehearse the full procedure on testnet with the
 exact addresses involved before executing on mainnet.
+
+---
+
+## Related documentation
+
+- [README — Contract layout](../README.md#contract-layout) — where `admin.rs`
+  sits in the overall module map.
+- [Timelock](./timelock.md) — delayed execution that gates privileged admin
+  operations.
+- [Incident runbook](./incident-runbook.md) — what to do if admin control is
+  lost or compromised.

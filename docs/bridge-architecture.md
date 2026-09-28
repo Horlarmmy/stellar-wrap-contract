@@ -107,3 +107,16 @@ pub struct InboundBridgeRecord {
 2. **Access Control**: Admin authorization is enforced for configuration (`set_bridge_relayer`, `set_chain_status`), and Relayer authorization is enforced for inbound wraps.
 3. **Emergency Pause**: Main contract pause flag immediately halts both outbound and inbound bridge operations.
 4. **Storage TTL Management**: Persistent entries (outbound requests, inbound records, processed flags) have TTL set to 1 year (~17,280 * 365 ledgers).
+
+---
+
+## Related Documentation
+
+- [README contract layout](../README.md#contract-layout) — full module map for `src/`.
+- [Admin rotation](admin-rotation.md) — `admin.rs` and `governance.rs`.
+- [Timelock](timelock.md) — `timelock.rs`.
+- [Revoke policy](revoke-policy.md) — `revoke.rs`.
+- [Whitelist merkle](whitelist-merkle.md) — `merkle.rs`.
+- [Signing payload](signing-payload.md) — `signature.rs`.
+- [Verify data](verify-data.md) — `queries.rs`.
+- [Incident runbook](incident-runbook.md) — operational procedures.

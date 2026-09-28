@@ -21,9 +21,6 @@ jobs:
       - name: Run test suite
         run: cargo test --all-features
 
-      - name: Optimized build
-        run: cargo build --release --target wasm32-unknown-unknown
-
       - name: Verify CHANGELOG updated against tag
         run: |
           TAG="${GITHUB_REF_NAME}"
@@ -33,36 +30,105 @@ jobs:
             exit 1
           fi
 
-  release:
+  build-a:
     needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build WASM (release)
+        run: |
+          docker build -t stellar-wrap-build .
+          docker run --rm -v "$PWD/out:/out" stellar-wrap-build
+
+      - name: Compute SHA256
+        id: sha256
+        run: |
+          WASM_FILE="out/stellar_wrap_contract.wasm"
+          SHA=$(sha256sum "$WASM_FILE" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-a
+          path: out/stellar_wrap_contract.wasm
+
+    outputs:
+      sha256: ${{ steps.sha256.outputs.sha256 }}
+
+  build-b:
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build WASM (release)
+        run: |
+          docker build -t stellar-wrap-build .
+          docker run --rm -v "$PWD/out:/out" stellar-wrap-build
+
+      - name: Compute SHA256
+        id: sha256
+        run: |
+          WASM_FILE="out/stellar_wrap_contract.wasm"
+          SHA=$(sha256sum "$WASM_FILE" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-b
+          path: out/stellar_wrap_contract.wasm
+
+    outputs:
+      sha256: ${{ steps.sha256.outputs.sha256 }}
+
+  verify-reproducible:
+    needs: [build-a, build-b]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare independent build hashes
+        run: |
+          echo "build-a: ${{ needs.build-a.outputs.sha256 }}"
+          echo "build-b: ${{ needs.build-b.outputs.sha256 }}"
+          if [ "${{ needs.build-a.outputs.sha256 }}" != "${{ needs.build-b.outputs.sha256 }}" ]; then
+            echo "::error::Builds are not reproducible: hashes differ"
+            exit 1
+          fi
+          echo "Builds are reproducible: hashes match"
+
+  release:
+    needs: verify-reproducible
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Download verified WASM
+        uses: actions/download-artifact@v4
         with:
-          targets: wasm32-unknown-unknown
-
-      - name: Build WASM (release)
-        run: cargo build --release --target wasm32-unknown-unknown
+          name: wasm-a
+          path: out
 
       - name: Compute SHA256
         id: sha256
         run: |
-          WASM_FILE="target/wasm32-unknown-unknown/release/stellar_wrap_contract.wasm"
+          WASM_FILE="out/stellar_wrap_contract.wasm"
           SHA=$(sha256sum "$WASM_FILE" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-          echo "$SHA  stellar_wrap_contract.wasm" > stellar_wrap_contract.wasm.sha256
+          echo "$SHA  stellar_wrap_contract.wasm" > out/stellar_wrap_contract.wasm.sha256
+
+      - name: Reminder: update CHANGELOG before tagging
+        run: echo "Reminder: update CHANGELOG.md with this version details before tagging."
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/wasm32-unknown-unknown/release/stellar_wrap_contract.wasm
-            stellar_wrap_contract.wasm.sha256
+            out/stellar_wrap_contract.wasm
+            out/stellar_wrap_contract.wasm.sha256
           body: |
             ## Release ${{ github.ref_name }}
 
