@@ -110,6 +110,31 @@ pub struct InboundBridgeRecord {
 
 ---
 
+## Decision Records
+
+The bridge contract's security posture is governed by two architecture decision
+records. They are filed under `docs/` alongside this document and are linked
+here so a reader finds them in context:
+
+- [`docs/PROXY_PATTERN_DECISION.md`](./PROXY_PATTERN_DECISION.md) — the proxy
+  pattern decision. It records that the bridge does **not** use a batching
+  proxy contract (issue #517); each bridge entry point is called directly and
+  authorization is enforced per call. This decision is enforced by the
+  `proxy_pattern_decision` test module, which fails if a batching proxy entry
+  point is introduced without updating the record.
+- [`docs/SIGNATURE_VERIFICATION_DECISION.md`](./SIGNATURE_VERIFICATION_DECISION.md)
+  — the signature verification decision. It records that inbound bridge
+  operations are authorized by `require_auth()` on the configured relayer
+  rather than by off-chain signatures. This decision is enforced by the
+  `signature_verification_decision` test module, which fails if a signature
+  verification path is added without updating the record.
+
+Both records carry a review checklist item (see the "Enforcement" section of
+each record) so a reviewer can catch a violation during code review even
+before the executable test runs.
+
+---
+
 ## Bridge Architecture and Authority Model
 
 This section describes how cross-chain messages are relayed into the contract and how the bridge relayer fits into the contract's overall authority model.
