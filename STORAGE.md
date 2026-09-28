@@ -139,6 +139,3 @@ $$\text{fee} = \min\left(\text{max\_fee},\, \text{base\_fee} + \text{per\_kib\_f
 - `mint_wrap()`: Computes new entries created (`Wrap`, `WrapCount`, `LatestPeriod`, `UserPeriods`, `LastUpdated`) and increments `StorageBytes`.
 - `revoke_wrap()`: Decrements `StorageBytes` by the estimated size of the removed `Wrap` and any cleared indexes.
 - `extend_ttl()`: Renews TTL for persistent entries without altering byte accounting.
-
-
-

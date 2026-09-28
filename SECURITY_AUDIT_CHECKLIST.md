@@ -1,8 +1,8 @@
 # Security Audit Checklist for Mainnet Readiness
 
-**Contract:** Stellar Wrap Registry<br>
-**Version:** 0.1.0<br>
-**Repository:** https://github.com/zintarh/stellar-wrap-contract<br>
+**Contract:** Stellar Wrap Registry  
+**Version:** 0.1.0  
+**Repository:** https://github.com/zintarh/stellar-wrap-contract  
 **Date:** June 2026
 
 ---
@@ -11,9 +11,41 @@
 
 This checklist provides a formal security audit framework for the Stellar Wrap Contract before mainnet deployment. Each item is linked to its implementation location in the codebase and includes acceptance criteria.
 
-**Audit Status:** ✅ COMPLETE - All requirements met<br>
-**External Reviewer Sign-off:** _______________<br>
+**Audit Status:** ⚠️ INCOMPLETE - Blocking security findings open  
+**External Reviewer Sign-off:** _______________  
 **Date:** _______________
+
+---
+
+## Overall Security Status
+
+**Status:** ❌ NOT READY FOR MAINNET — BLOCKED BY OPEN SECURITY FINDINGS
+
+This status is **derived from the open `security`-labelled issues** in the tracker, not hand-maintained. As long as any issue carrying the `security` label remains open, this checklist MUST report NOT READY and mainnet deployment MUST be blocked. The status cannot be marked ready by editing this document alone; it flips to ready only when the derived query below returns zero open `security` issues.
+
+**Derivation (run as part of the release process):**
+
+```
+# Any open issue with the `security` label blocks mainnet readiness.
+# If this returns any results, the status above is NOT READY.
+gh issue list --label security --state open
+```
+
+Do not hand-edit the status line to "READY" while the query above returns results.
+
+---
+
+## Blocking Findings (checked during release)
+
+This section is verified as part of the release process. Every item below is an **open** `security`-labelled issue and blocks mainnet deployment until resolved and closed.
+
+- [ ] **#647 — Arbitrary contract invocation.** A caller can invoke an arbitrary contract; must be constrained before mainnet.
+- [ ] **#650 — Missing Merkle domain separation.** Merkle leaves are not domain-separated, enabling cross-context proof reuse; must be fixed before mainnet.
+- [ ] **#651 — Unchecked arithmetic with overflow checks disabled.** Arithmetic in a profile with overflow checks disabled can wrap; must be made checked before mainnet.
+- [ ] **#653 — Mint signatures never expire.** Mint signatures remain valid indefinitely; must gain expiry/replay bounds before mainnet.
+- [ ] **#672 — Timelock actions stay executable forever.** Timelock actions never expire and remain executable indefinitely; must be bounded before mainnet.
+
+**Release gate:** Mainnet deployment is blocked while any box above is unchecked. Re-run the derivation query (`gh issue list --label security --state open`) and confirm it returns no results before proceeding.
 
 ---
 
@@ -21,7 +53,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 
 ### 1. Ed25519 Signature Verification
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:173-175` (mint_wrap), `src/lib.rs:528-529` (update_wrap)
 
 **Implementation Details:**
@@ -49,13 +81,13 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 - `test_mint_with_all_ones_signature_rejected` ✅
 - `test_mint_with_tampered_signature_rejected` ✅
 
-**Related Issues:** None
+**Related Issues:** #653 (mint signatures never expire — open, blocking)
 
 ---
 
 ### 2. Admin Key Rotation (No Brickable Keys)
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:89-103` (update_admin)
 
 **Implementation Details:**
@@ -80,7 +112,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 
 ### 3. Storage TTL Management (Data Loss Prevention)
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:274-278`, `src/lib.rs:411-425`, `src/lib.rs:670-689`
 
 **Implementation Details:**
@@ -106,7 +138,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 
 ### 4. Integer Overflow Protection
 
-**Status:** ✅ FIXED<br>
+**Status:** ⚠️ PARTIAL — see blocking finding #651  
 **Location:** `src/lib.rs:429` (count increment), `src/lib.rs:584` (count decrement)
 
 **Implementation Details:**
@@ -125,7 +157,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 - No specific overflow tests found
 - **RECOMMENDATION:** Add test for maximum wrap count scenario
 
-**Related Issues:** None
+**Related Issues:** #651 (unchecked arithmetic with overflow checks disabled — open, blocking)
 
 **Fix Applied:** Changed `current_count + 1` to `current_count.checked_add(1).unwrap()`
 
@@ -133,7 +165,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 
 ### 5. Error Handling (No Silent Failures)
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:27-50` (ContractError enum)
 
 **Implementation Details:**
@@ -171,7 +203,7 @@ This checklist provides a formal security audit framework for the Stellar Wrap C
 
 ### 6. Event Emission for State Changes
 
-**Status:** ✅ FIXED<br>
+**Status:** ✅ FIXED  
 **Location:** Multiple locations in `src/lib.rs`
 
 **Implementation Details:**
@@ -211,7 +243,7 @@ Events emitted:
 
 ### 7. Upgrade Mechanism (Admin-Gated)
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:741-750` (upgrade function)
 
 **Implementation Details:**
@@ -239,7 +271,7 @@ Events emitted:
 
 ### 8. Reentrancy Protection
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:147-151` (mint_wrap), `src/lib.rs:230-234` (claim_wrap)
 
 **Implementation Details:**
@@ -261,7 +293,7 @@ Events emitted:
 
 ### 8a. Cross-Contract Call Surface (Reentrancy Analysis)
 
-**Status:** ✅ ANALYSED<br>
+**Status:** ✅ ANALYSED  
 **Location:** `src/oracle.rs` (oracle client), `src/token.rs` (token interface), `src/lib.rs` (stake / unstake / withdraw_stake)
 
 **Implementation Details:**
@@ -298,7 +330,7 @@ Every call site that transfers control to another contract is enumerated below. 
 
 ### 9. Pausable Mechanism (Emergency Stop)
 
-**Status:** ✅ IMPLEMENTED<br>
+**Status:** ✅ IMPLEMENTED  
 **Location:** `src/lib.rs:86-134` (pause/unpause), `src/lib.rs:136-140` (require_not_paused)
 
 **Implementation Details:**
@@ -333,7 +365,7 @@ Every call site that transfers control to another contract is enumerated below. 
 
 ### 10. Test Coverage for Public Functions
 
-**Status:** ✅ IMPROVED<br>
+**Status:** ✅ IMPROVED  
 **Location:** `src/test.rs`, `src/security_test.rs`
 
 **Public Functions:**
@@ -423,7 +455,7 @@ Every call site that transfers control to another contract is enumerated below. 
 
 ---
 
-## Overall Security Status: ✅ READY FOR MAINNET (with minor recommendations)
+## Overall Security Status: ❌ NOT READY FOR MAINNET — DERIVED FROM OPEN SECURITY ISSUES (see above)
 
 All critical security requirements from Issue #70 have been addressed:
 - ✅ Ed25519 signature verification correct and covers all fields
@@ -441,9 +473,9 @@ All critical security requirements from Issue #70 have been addressed:
 
 ## External Reviewer Sign-off
 
-**Reviewer Name:** _______________<br>
-**Organization:** _______________<br>
-**Date:** _______________<br>
+**Reviewer Name:** _______________  
+**Organization:** _______________  
+**Date:** _______________  
 **Comments:**
 ___________________________________________________________________________
 ___________________________________________________________________________

@@ -2,6 +2,28 @@
 
 Use this checklist before deploying the Stellar Wrap Contract to mainnet. The mechanical steps are automated; this checklist covers only what needs a person. It complements the release workflow in [.github/workflows/release.yml](.github/workflows/release.yml) and the usage notes in [README.md](README.md).
 
+## 0. Overall security status
+
+**Status: ❌ NOT READY FOR MAINNET — blocked by open security findings.**
+
+This status is derived from the open issues carrying the `security` label, not hand-maintained. While any `security`-labelled issue is open, the contract is **not** mainnet-ready and this checklist must not be used to justify a deployment. See [Blocking security findings](#blocking-security-findings) below.
+
+To re-derive the status, list the open security issues and confirm the list is empty before proceeding:
+
+- [ ] `gh issue list --label security --state open` returns no results.
+
+## Blocking security findings
+
+These open `security`-labelled issues block mainnet deployment. This section is checked as part of the release process; do not proceed past it while any item is unchecked.
+
+- [ ] #647 — Arbitrary contract invocation.
+- [ ] #650 — Missing Merkle domain separation.
+- [ ] #651 — Unchecked arithmetic in a profile with overflow checks disabled.
+- [ ] #653 — Mint signatures that never expire.
+- [ ] #672 — Timelock actions that stay executable forever.
+
+Each item is checked only once the corresponding issue is closed. The overall status above is derived from this list: it stays **NOT READY** while any of these issues (or any other `security`-labelled issue) remains open.
+
 ## 1. Pre-flight validation (automated)
 
 The release-gate workflow runs the pre-flight checks automatically on the release tag:
