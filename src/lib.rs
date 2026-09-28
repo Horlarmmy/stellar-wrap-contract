@@ -878,6 +878,8 @@ mod admin_test;
 #[cfg(test)]
 mod balance_of_test;
 #[cfg(test)]
+mod events_test;
+#[cfg(test)]
 mod batch_test;
 #[cfg(test)]
 mod bridge_test;

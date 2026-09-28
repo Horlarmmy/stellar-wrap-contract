@@ -1283,6 +1283,62 @@ The contract includes a DAO governance module for updating the contract's admin 
 3. **Execute Proposal:** After `duration_seconds` elapses, call `execute_admin_proposal(proposal_id)`. If `votes_for > votes_against`, the contract admin updates to `proposed_admin`.
 4. **Cancel Proposal:** Proposer or current admin can cancel active proposals via `cancel_admin_proposal(caller, proposal_id)`.
 
+## Event catalogue
+
+Every event the contract publishes, pinned by `src/events_test.rs`. The table is the
+contract's event API: a change to any row must be a deliberate change to this file and
+to the tests in the same commit, because `pipeline/` and external indexers decode these
+shapes. `<..>` marks a value that varies per call.
+
+| Emitted by | Topics | Data |
+| --- | --- | --- |
+| `initialize` | `v1 / admin / init` | `Event::AdminInit(admin)` |
+| `pause, unpause` | `v1 / admin / pause` | `Event::AdminPause(paused)` |
+| `update_admin` | `v1 / admin / updated` | `(current_admin, new_admin)` |
+| `set_transfer_fee` | `fee` | `(token, recipient, amount)` |
+| `clear_transfer_fee` | `fee_clr` | `()` |
+| `upgrade` | `upgrade / <version>` | `wasm_hash: BytesN<32>` |
+| `update_admin_pubkey` | `v1 / pubkey / rotate` | `new_pubkey: BytesN<32>` |
+| `set_wrap_metadata` | `v1 / admin / metadata` | `(user, period, description, image_url)` |
+| `mint_wrap` | `v1 / wrap / mint` | `Event::Mint(user, period, archetype)` |
+| `mint_wrap_batch` | `Mint / <user> / <period>` | `MintEventData::Mint(user, period, archetype)` |
+| `expire_wrap` | `expire / <user> / <period>` | `symbol_short!(\` |
+| `transfer_wrap (no fee)` | `transfer / <from> / <to> / <period>` | `()` |
+| `transfer_wrap (fee charged)` | `transfer / <from> / <to> / <period>` | `(token, recipient, amount)` |
+| `backfill_wrap_periods` | `backfill / <user>` | `period_count: u32` |
+| `revoke_wrap` | `revoke / <user> / <period>` | `reason_hash: BytesN<32>` |
+| `burn_wrap` | `burn / <user> / <period>` | `user: Address` |
+| `stake (first stake)` | `stake / <user> / init` | `amount: i128` |
+| `stake (top-up)` | `stake / <user> / add` | `amount: i128` |
+| `unstake` | `unstake / <user>` | `amount: i128` |
+| `withdraw_stake` | `withdraw / <user>` | `amount: i128` |
+| `set_stake_config` | `stake / cfg` | `config: StakeConfig` |
+| `enable_timelock` | `timelock / enabled` | `delay_seconds: u64` |
+| `timelock_schedule` | `timelock / sched` | `(id, eta)` |
+| `timelock_cancel` | `timelock / cancel` | `id: BytesN<32>` |
+| `timelock_execute (upgrade action)` | `upgrade` | `wasm_hash: BytesN<32>` |
+| `timelock_execute (admin action)` | `admin / updated` | `(admin, new_admin)` |
+| `timelock_execute (other action)` | `timelock / exec` | `id: BytesN<32>` |
+| `timelock_sweep_expired` | `timelock / sweep` | `id: BytesN<32>` |
+| `create_admin_proposal` | `gov / propose` | `(proposal_id, proposer, proposed_admin)` |
+| `vote_admin_proposal` | `gov / vote` | `(proposal_id, voter, support)` |
+| `execute_admin_proposal (passed)` | `gov / executed` | `(proposal_id, proposed_admin)` |
+| `execute_admin_proposal (defeated)` | `gov / defeated` | `proposal_id: u64` |
+| `cancel_admin_proposal` | `gov / cancelled` | `(proposal_id, caller)` |
+| `bridge_wrap_out` | `br_out / <user> / <destination_chain>` | `(nonce, recipient_address, period)` |
+| `bridge_wrap_refund` | `br_refund / <sender> / <period>` | `outbound_nonce: u64` |
+| `bridge_wrap_in` | `br_in / <recipient> / <source_chain>` | `(source_nonce, period)` |
+
+Notes for indexers:
+
+- The `v1 / …` triples are the versioned envelope the typed publisher emits; the single-
+  and double-topic shapes are the older ad-hoc tuples that are still on the wire.
+- `mint_wrap` and `mint_wrap_batch` currently publish **different shapes** for the same
+  operation (see the two `mint` rows above). Both are pinned here so the divergence is
+  explicit; unifying them is tracked by the same issue that added this catalogue.
+- `pipeline/src/decoder.ts` decodes storage keys only; it has no event decoding path, so
+  there is nothing in it to check against this catalogue today.
+
 ## Handsoff notes
 
 <!-- handsoff-issue-437 -->
