@@ -74,6 +74,38 @@ pub struct StellarWrapContract;
 #[contractimpl]
 #[allow(clippy::too_many_arguments)]
 impl StellarWrapContract {
+    /// Initializes the contract with the controlling admin address and the
+    /// Ed25519 public key used to verify mint signatures.
+    ///
+    /// Stores `admin`, `admin_pubkey`, and storage schema version `1`, and
+    /// emits an `("v1", "admin", "init")` event carrying `admin`. This
+    /// entrypoint does not require authorization and can be called only once.
+    ///
+    /// # Panics
+    /// - [`ContractError::AlreadyInitialized`] if the contract was already
+    ///   initialized.
+    /// - [`ContractError::InvalidAdminPubKey`] if `admin_pubkey` is the
+    ///   all-zero key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    /// use stellar_wrap_contract::StellarWrapContract;
+    ///
+    /// let env = Env::default();
+    /// let admin = Address::generate(&env);
+    /// // Any non-zero key. The all-zero public key is rejected.
+    /// let admin_pubkey = BytesN::from_array(&env, &[1u8; 32]);
+    ///
+    /// StellarWrapContract::initialize(env.clone(), admin.clone(), admin_pubkey.clone());
+    ///
+    /// assert_eq!(StellarWrapContract::get_admin(env.clone()), Some(admin));
+    /// assert_eq!(
+    ///     StellarWrapContract::get_admin_pubkey(env),
+    ///     Some(admin_pubkey)
+    /// );
+    /// ```
     pub fn initialize(e: Env, admin: Address, admin_pubkey: BytesN<32>) {
         admin::initialize(e, admin, admin_pubkey);
     }
