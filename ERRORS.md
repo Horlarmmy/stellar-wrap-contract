@@ -129,6 +129,20 @@ Some failures can look like “unexpected panics” depending on the tooling:
 
 ---
 
+## Unstake / withdraw timing (unbonding period)
+
+`unstake` and `withdraw_stake` are separate entry points with an unbonding delay between them. The following interleavings have defined, documented outcomes:
+
+- **Stake again after `unstake`, before `withdraw_stake`:** the pending withdrawal is **not** reset, cancelled, or corrupted. The unbonding record (amount + unlock ledger) is preserved, and the new stake is tracked independently. `withdraw_stake` still releases only the originally unstaked amount once the delay elapses.
+- **`withdraw_stake` before the delay elapses:** fails cleanly (the unlock ledger has not been reached); no funds are released.
+- **`withdraw_stake` twice:** the second call fails cleanly because the pending withdrawal record is cleared on the first successful withdrawal; no double release.
+- **`unstake` with no active stake:** fails cleanly rather than writing a zero record; no empty/zero withdrawal is persisted.
+- **Withdrawing exactly at the boundary ledger:** succeeds — the delay is satisfied when the current ledger equals the unlock ledger.
+
+Each of these interleavings is covered by a test.
+
+---
+
 ## Troubleshooting tips (fast)
 
 - If you see **`Error(Contract, #3)`**, check that:
