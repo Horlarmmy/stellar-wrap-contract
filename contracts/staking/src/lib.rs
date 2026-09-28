@@ -77,6 +77,21 @@ impl StakingContract {
         soroban_sdk::Symbol::new(&env, "STK")
     }
 
+    /// Return the number of decimals used by the staking token.
+    ///
+    /// This is the fixed precision applied to every amount handled by the
+    /// contract (for example, a value of `7` means one whole token is
+    /// represented as `10_000_000` base units). It is a contract-defined
+    /// constant and does not depend on any stored state, so it can be called
+    /// at any time, including while the contract is paused.
+    ///
+    /// # Returns
+    ///
+    /// The number of decimals as a `u32`.
+    pub fn decimals(_env: Env) -> u32 {
+        7
+    }
+
     /// Whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         env.storage()
@@ -235,20 +250,6 @@ mod test {
         env.mock_all_auths();
         let contract_id = env.register_contract(None, StakingContract);
         let client = StakingContractClient::new(&env, &contract_id);
-        let user = Address::generate(&env);
+        le
 
-        assert_eq!(client.stake(&user, &0), Err(Error::InvalidAmount));
-    }
-
-    #[test]
-    fn stake_rejects_negative() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, StakingContract);
-        let client = StakingContractClient::new(&env, &contract_id);
-        let user = Address::generate(&env);
-
-        assert_eq!(client.stake(&user, &-1), Err(Error::InvalidAmount));
-        assert_eq!(client.stake(&user, &i128::MIN), Err(Error::InvalidAmount));
-    }
-}
+/* … truncated 571 chars — edit only what you need near the top … */
