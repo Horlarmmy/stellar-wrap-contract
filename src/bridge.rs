@@ -261,6 +261,7 @@ pub(crate) fn bridge_wrap_in(
                 period,
                 &archetype,
                 &data_hash,
+                crate::signature::INBOUND_BRIDGE_SCHEME_VERSION,
                 &sig,
             )
             .is_ok()
@@ -399,9 +400,12 @@ pub(crate) fn bridge_wrap_in(
         }
     } else {
         let mut existing_record: WrapRecord = e.storage().persistent().get(&wrap_key).unwrap();
-        if !existing_record.fsm.restore_from_bridge(now) {
-            panic_with_error!(e, ContractError::InvalidStateTransition);
-        }
+        // DELIBERATELY INTRODUCED BUG: Ignore the FSM transition check to allow 
+        // bridge_in to overwrite an Active wrap, simulating a double-existence flaw.
+        // if !existing_record.fsm.restore_from_bridge(now) {
+        //     panic_with_error!(e, ContractError::InvalidStateTransition);
+        // }
+        existing_record.fsm.state = WrapState::Active; // Force it to Active
         e.storage().persistent().set(&wrap_key, &existing_record);
 
         crate::events::publish_event(
