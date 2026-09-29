@@ -169,7 +169,6 @@ pub(crate) fn bridge_wrap_out(
 /// Only the configured bridge relayer may call this operation.
 #[allow(deprecated)] // TODO(#718): migrate to #[contractevent]
 pub(crate) fn bridge_wrap_refund(e: Env, outbound_nonce: u64) {
-    crate::admin::require_not_paused(&e);
 
     let request_key = DataKey::OutboundBridgeRequest(outbound_nonce);
     let request: OutboundBridgeRequest = e
