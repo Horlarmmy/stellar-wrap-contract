@@ -11,8 +11,8 @@ use crate::{
     signature::verify_inbound_bridge_signature,
     storage_accounting,
     storage_types::{
-        BridgeRelayerSet, InboundBridgeRecord, OutboundBridgeRequest, WrapLifecycleFSM, WrapRecord,
-        WrapState,
+        BridgeRelayerSet, InboundBridgeRecord, OutboundBridgeRequest, OutboundRequestState,
+        WrapLifecycleFSM, WrapRecord, WrapState,
     },
     ContractError, DataKey,
 };
@@ -147,6 +147,7 @@ pub(crate) fn bridge_wrap_out(
         archetype: wrap_record.archetype.clone(),
         data_hash: wrap_record.data_hash.clone(),
         timestamp: now,
+        state: OutboundRequestState::Pending,
     };
 
     let req_key = DataKey::OutboundBridgeRequest(next_nonce);
@@ -172,11 +173,19 @@ pub(crate) fn bridge_wrap_refund(e: Env, outbound_nonce: u64) {
     crate::admin::require_not_paused(&e);
 
     let request_key = DataKey::OutboundBridgeRequest(outbound_nonce);
-    let request: OutboundBridgeRequest = e
+    let mut request: OutboundBridgeRequest = e
         .storage()
         .persistent()
         .get(&request_key)
         .unwrap_or_else(|| panic_with_error!(e, ContractError::InvalidBridgePayload));
+
+    // Refund is reachable only from the Pending state. A request that has
+    // already been completed (honoured on the destination chain) or refunded
+    // must never be refunded again, otherwise the same wrap could exist on
+    // both chains.
+    if request.state != OutboundRequestState::Pending {
+        panic_with_error!(e, ContractError::InvalidStateTransition);
+    }
 
     let _relayer_set = get_bridge_relayers(&e, request.destination_chain)
         .unwrap_or_else(|| panic_with_error!(e, ContractError::BridgeNotInitialized));
@@ -194,6 +203,14 @@ pub(crate) fn bridge_wrap_refund(e: Env, outbound_nonce: u64) {
     if !wrap_record.fsm.restore_from_bridge(now) {
         panic_with_error!(e, ContractError::InvalidStateTransition);
     }
+
+    // Mark the outbound request terminally as refunded so it cannot be
+    // refunded twice and so any later completion is rejected.
+    request.state = OutboundRequestState::Refunded;
+    e.storage().persistent().set(&request_key, &request);
+    e.storage()
+        .persistent()
+        .extend_ttl(&request_key, TTL_ONE_YEAR, TTL_ONE_YEAR);
 
     e.storage().persistent().set(&wrap_key, &wrap_record);
     e.storage()

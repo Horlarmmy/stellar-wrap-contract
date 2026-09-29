@@ -25,6 +25,8 @@ pub enum Event {
     // Bridge
     BridgeOut(Address, u32, u64, BytesN<32>, u64),
     BridgeRefund(Address, u64, u64),
+    BridgeRefundRejected(Address, u64, Symbol),
+    BridgeRefundState(Address, u64, Symbol),
     BridgeInRej(Address, u32, u64, u64),
     BridgeIn(Address, u32, u64, u64),
 
@@ -102,6 +104,14 @@ pub fn publish_event(e: &Env, event: Event) {
             .publish((v1, symbol_short!("bridge"), symbol_short!("out")), event),
         Event::BridgeRefund(..) => e.events().publish(
             (v1, symbol_short!("bridge"), symbol_short!("refund")),
+            event,
+        ),
+        Event::BridgeRefundRejected(..) => e.events().publish(
+            (v1, symbol_short!("bridge"), symbol_short!("ref_rej")),
+            event,
+        ),
+        Event::BridgeRefundState(..) => e.events().publish(
+            (v1, symbol_short!("bridge"), symbol_short!("ref_st")),
             event,
         ),
         Event::BridgeInRej(..) => e.events().publish(
