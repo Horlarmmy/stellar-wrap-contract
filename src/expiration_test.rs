@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use super::*;
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
@@ -8,6 +7,7 @@ use soroban_sdk::{
     Address, BytesN, Env, Symbol, TryIntoVal, Val,
 };
 
+use super::*;
 use crate::storage_types::{WrapLifecycleFSM, WrapRecord, WrapState};
 
 // ─── FSM transition unit tests ──────────────────────────────────────────
@@ -103,7 +103,7 @@ fn insert_wrap_in_state(
 #[test]
 fn test_expire_draft_wrap_after_deadline_succeeds() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -112,6 +112,7 @@ fn test_expire_draft_wrap_after_deadline_succeeds() {
     let period = 202501u64;
     let insertion_time = 1000000u64;
 
+    env.mock_all_auths();
     client.initialize(&admin, &pubkey);
 
     // Insert a Draft wrap directly with a known timestamp.
@@ -141,7 +142,7 @@ fn test_expire_draft_wrap_after_deadline_succeeds() {
 #[test]
 fn test_expire_pending_wrap_after_deadline_succeeds() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -177,7 +178,7 @@ fn test_expire_pending_wrap_after_deadline_succeeds() {
 #[should_panic(expected = "Error(Contract, #46)")]
 fn test_expire_wrap_before_deadline_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -210,7 +211,7 @@ fn test_expire_wrap_before_deadline_fails() {
 #[should_panic(expected = "Error(Contract, #9)")]
 fn test_expire_nonexistent_wrap_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -233,7 +234,7 @@ fn test_expire_nonexistent_wrap_fails() {
 #[should_panic(expected = "Error(Contract, #8)")]
 fn test_expire_active_wrap_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -266,7 +267,7 @@ fn test_expire_active_wrap_fails() {
 #[should_panic(expected = "Error(Contract, #8)")]
 fn test_expire_archived_wrap_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -299,7 +300,7 @@ fn test_expire_archived_wrap_fails() {
 #[should_panic(expected = "Error(Contract, #8)")]
 fn test_expire_cancelled_wrap_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -332,7 +333,7 @@ fn test_expire_cancelled_wrap_fails() {
 #[should_panic(expected = "Error(Contract, #8)")]
 fn test_expire_already_expired_wrap_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -369,7 +370,7 @@ fn test_expire_at_exact_deadline_boundary_fails() {
     // The check is `now < expires_at`, so at exactly the deadline the wrap
     // is NOT yet expired (strict less-than).
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -402,7 +403,7 @@ fn test_expire_at_exact_deadline_boundary_fails() {
 #[test]
 fn test_expire_just_past_deadline_succeeds() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -439,7 +440,7 @@ fn test_expire_just_past_deadline_succeeds() {
 #[test]
 fn test_expire_wrap_emits_event() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -504,7 +505,7 @@ fn test_expire_wrap_emits_event() {
 #[test]
 fn test_default_expiration_duration_is_seven_days() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -519,7 +520,7 @@ fn test_default_expiration_duration_is_seven_days() {
 #[test]
 fn test_set_and_get_custom_expiration_duration() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -541,7 +542,7 @@ fn test_set_and_get_custom_expiration_duration() {
 #[test]
 fn test_custom_duration_affects_expire_behavior() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -581,30 +582,108 @@ fn test_custom_duration_affects_expire_behavior() {
 #[should_panic(expected = "Error(Contract, #47)")]
 fn test_set_expiration_duration_zero_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let pubkey = BytesN::from_array(&env, &[15u8; 32]);
 
+    env.mock_all_auths();
+    client.initialize(&admin, &pubkey);
+    client.set_expiration_duration(&0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #47)")]
+fn test_set_expiration_duration_below_min_fails() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pubkey = BytesN::from_array(&env, &[23u8; 32]);
+
     client.initialize(&admin, &pubkey);
     env.mock_all_auths();
-    client.set_expiration_duration(&0);
+    client.set_expiration_duration(&3599u64);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #47)")]
+fn test_set_expiration_duration_above_max_fails() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pubkey = BytesN::from_array(&env, &[24u8; 32]);
+
+    client.initialize(&admin, &pubkey);
+    env.mock_all_auths();
+    client.set_expiration_duration(&(30 * 24 * 60 * 60 + 1));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #47)")]
+fn test_set_expiration_duration_u64_max_fails() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pubkey = BytesN::from_array(&env, &[25u8; 32]);
+
+    client.initialize(&admin, &pubkey);
+    env.mock_all_auths();
+    client.set_expiration_duration(&u64::MAX);
+}
+
+#[test]
+fn test_set_expiration_duration_min_succeeds() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pubkey = BytesN::from_array(&env, &[26u8; 32]);
+
+    client.initialize(&admin, &pubkey);
+    env.mock_all_auths();
+    let min_duration: u64 = 60 * 60;
+    client.set_expiration_duration(&min_duration);
+    assert_eq!(client.expiration_duration(), min_duration);
+}
+
+#[test]
+fn test_set_expiration_duration_max_succeeds() {
+    let env = Env::default();
+    let contract_id = env.register(StellarWrapContract, ());
+    let client = StellarWrapContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let pubkey = BytesN::from_array(&env, &[27u8; 32]);
+
+    client.initialize(&admin, &pubkey);
+    env.mock_all_auths();
+    let max_duration: u64 = 30 * 24 * 60 * 60;
+    client.set_expiration_duration(&max_duration);
+    assert_eq!(client.expiration_duration(), max_duration);
 }
 
 #[test]
 #[should_panic]
 fn test_set_expiration_duration_non_admin_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let pubkey = BytesN::from_array(&env, &[16u8; 32]);
 
+    env.mock_all_auths();
     client.initialize(&admin, &pubkey);
 
-    // Do NOT mock auths — require_auth will panic for non-admin.
+    env.set_auths(&[]);
     client.set_expiration_duration(&3600);
 }
 
@@ -614,7 +693,7 @@ fn test_set_expiration_duration_non_admin_fails() {
 #[should_panic(expected = "Error(Contract, #12)")]
 fn test_expire_wrap_when_paused_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -651,7 +730,7 @@ fn test_expire_wrap_when_paused_fails() {
 #[should_panic(expected = "Error(Contract, #46)")]
 fn test_expire_with_max_timestamp_does_not_overflow() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -691,7 +770,7 @@ fn test_expire_wrap_does_not_require_auth() {
     // deadline, so it panics with WrapNotExpired, confirming that auth
     // did NOT fail first (which would be a host-level panic).
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -721,7 +800,7 @@ fn test_expire_wrap_does_not_require_auth() {
 #[test]
 fn test_expire_one_wrap_does_not_affect_others() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
@@ -773,7 +852,7 @@ fn test_expire_one_wrap_does_not_affect_others() {
 #[test]
 fn test_expire_multiple_users_independently() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);

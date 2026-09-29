@@ -18,14 +18,25 @@
 //! ```bash
 //! cargo test --lib gen_print_mint_fixtures -- --ignored --nocapture
 //! ```
+//!
+//! ## Scheme versioning (Issue #885)
+//!
+//! The payload carries a scheme/version discriminant (`FIXTURE_PAYLOAD_VERSION`)
+//! distinct from the period and data hash. `CURRENT_PAYLOAD_VERSION` is the only
+//! supported scheme today; unknown versions are rejected by verification. The
+//! vectors below pin one fixture per supported version so a future migration can
+//! add a new version without invalidating outstanding signatures.
 
 extern crate std;
 
-use super::*;
-use crate::mint::CURRENT_PAYLOAD_VERSION;
-use crate::signature::{construct_mint_payload, verify_mint_signature, MINT_DOMAIN_SEPARATOR};
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{symbol_short, testutils::Address as _, Address, Bytes, BytesN, Env, Symbol};
+
+use super::*;
+use crate::{
+    mint::CURRENT_PAYLOAD_VERSION,
+    signature::{construct_mint_payload, verify_mint_signature, MINT_DOMAIN_SEPARATOR},
+};
 
 /// Fixed Ed25519 secret-key seed (tests only).
 pub const FIXTURE_SECRET_SEED: [u8; 32] = [0x42; 32];
@@ -42,6 +53,11 @@ pub const FIXTURE_DATA_HASH: [u8; 32] = [
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
 ];
 
+/// Every scheme version the contract currently accepts. A migration window
+/// would list both the old and new versions here; retiring the old scheme is a
+/// matter of removing it from this set (and from `mint_wrap`'s accepted set).
+pub const SUPPORTED_PAYLOAD_VERSIONS: [u32; 1] = [CURRENT_PAYLOAD_VERSION];
+
 fn hex_encode(bytes: &[u8]) -> std::string::String {
     use std::fmt::Write;
     let mut out = std::string::String::with_capacity(bytes.len() * 2);
@@ -56,8 +72,14 @@ fn fixture_archetype() -> Symbol {
 }
 
 fn setup_fixture_env() -> (Env, Address, Address, BytesN<32>, BytesN<64>, Bytes) {
+    setup_fixture_env_for_version(FIXTURE_PAYLOAD_VERSION)
+}
+
+fn setup_fixture_env_for_version(
+    version: u32,
+) -> (Env, Address, Address, BytesN<32>, BytesN<64>, Bytes) {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let user = Address::generate(&env);
     let signing_key = SigningKey::from_bytes(&FIXTURE_SECRET_SEED);
     let pubkey = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
@@ -71,7 +93,7 @@ fn setup_fixture_env() -> (Env, Address, Address, BytesN<32>, BytesN<64>, Bytes)
         FIXTURE_PERIOD,
         &archetype,
         &data_hash,
-        FIXTURE_PAYLOAD_VERSION,
+        version,
     );
 
     let mut buf = [0u8; 512];
@@ -110,8 +132,9 @@ fn test_deterministic_fixture_used_in_contract_mint() {
 
     let client = StellarWrapContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize(&admin, &pubkey);
     env.mock_all_auths();
+    env.mock_all_auths();
+    client.initialize(&admin, &pubkey);
 
     client.mint_wrap(
         &user,
@@ -130,6 +153,73 @@ fn test_fixture_inputs_are_stable() {
     assert_eq!(FIXTURE_PAYLOAD_VERSION, 1);
     assert_ne!(FIXTURE_DATA_HASH, [0u8; 32]);
     assert_eq!(FIXTURE_SECRET_SEED, [0x42; 32]);
+}
+
+/// One deterministic vector per supported scheme version (Issue #885).
+///
+/// Each entry pins the version discriminant, the canonical payload bytes, and a
+/// valid signature so a future scheme can be added alongside the current one
+/// without invalidating outstanding signatures.
+#[test]
+fn test_vector_per_supported_version() {
+    assert!(!SUPPORTED_PAYLOAD_VERSIONS.is_empty());
+    assert!(SUPPORTED_PAYLOAD_VERSIONS.contains(&CURRENT_PAYLOAD_VERSION));
+
+    for &version in SUPPORTED_PAYLOAD_VERSIONS.iter() {
+        let (env, contract_id, user, pubkey, signature, payload) =
+            setup_fixture_env_for_version(version);
+
+        // The version discriminant is embedded in the signed payload, distinct
+        // from the period and data hash.
+        let mut buf = [0u8; 512];
+        let len = payload.len() as usize;
+        payload.copy_into_slice(&mut buf[..len]);
+        let version_bytes = version.to_be_bytes();
+        assert!(
+            buf[..len].windows(4).any(|w| w == version_bytes),
+            "payload must embed the scheme version discriminant"
+        );
+
+        let data_hash = BytesN::from_array(&env, &FIXTURE_DATA_HASH);
+        let archetype = fixture_archetype();
+        assert!(verify_mint_signature(
+            &env,
+            &pubkey,
+            &contract_id,
+            &user,
+            FIXTURE_PERIOD,
+            &archetype,
+            &data_hash,
+            version,
+            &signature,
+        )
+        .is_ok());
+    }
+}
+
+/// Unknown scheme versions must be rejected rather than assumed to be current.
+#[test]
+fn test_unknown_version_is_rejected() {
+    let unknown = CURRENT_PAYLOAD_VERSION + 1;
+    assert!(!SUPPORTED_PAYLOAD_VERSIONS.contains(&unknown));
+
+    let (env, contract_id, user, pubkey, signature, _payload) =
+        setup_fixture_env_for_version(unknown);
+    let data_hash = BytesN::from_array(&env, &FIXTURE_DATA_HASH);
+    let archetype = fixture_archetype();
+
+    assert!(verify_mint_signature(
+        &env,
+        &pubkey,
+        &contract_id,
+        &user,
+        FIXTURE_PERIOD,
+        &archetype,
+        &data_hash,
+        unknown,
+        &signature,
+    )
+    .is_err());
 }
 
 #[test]

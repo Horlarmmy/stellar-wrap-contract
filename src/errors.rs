@@ -63,4 +63,84 @@ pub enum ContractError {
     StorageInvariantViolation = 51,
     /// The admin signing key provided to `initialize` is invalid (e.g. all-zero).
     InvalidAdminPubKey = 52,
+    InvalidThreshold = 53,
+    MerkleProofTooLong = 54,
+    // Timelock grace period
+    TimelockOperationExpired = 55,
+    TimelockOperationNotExpired = 56,
+}
+
+impl ContractError {
+    /// Total number of variants in the enum. Used by the coverage test in
+    /// `tests/error_variant_coverage.rs` to detect newly added variants that
+    /// have not yet been mapped to a producing code path and a failing-path
+    /// test. When a variant is added, bump this constant and add the variant
+    /// to the `ALL_VARIANTS` table in that test; otherwise CI fails.
+    pub const VARIANT_COUNT: u32 = 56;
+
+    /// Every variant in declaration order. The coverage test iterates this
+    /// table to assert each variant is reachable and asserted by a test.
+    pub const ALL_VARIANTS: [ContractError; Self::VARIANT_COUNT as usize] = [
+        ContractError::AlreadyInitialized,
+        ContractError::NotInitialized,
+        ContractError::Unauthorized,
+        ContractError::WrapAlreadyExists,
+        ContractError::InvalidSignature,
+        ContractError::InvalidPeriod,
+        ContractError::MigrationAlreadyApplied,
+        ContractError::InvalidStateTransition,
+        ContractError::WrapNotFound,
+        ContractError::NoAdminTransferProposal,
+        ContractError::AdminTransferProposalExists,
+        ContractError::Paused,
+        ContractError::ArithmeticOverflow,
+        ContractError::InvalidFeeParams,
+        ContractError::BatchEmpty,
+        ContractError::BatchTooLarge,
+        ContractError::DuplicateBatchEntry,
+        ContractError::StakeTooLow,
+        ContractError::StakeNotFound,
+        ContractError::StakeCooldownActive,
+        ContractError::StakeNotUnstaking,
+        ContractError::StakeCooldownNotElapsed,
+        ContractError::InvalidStakeConfig,
+        ContractError::StakeArithmeticOverflow,
+        ContractError::ProposalNotFound,
+        ContractError::ProposalNotActive,
+        ContractError::ProposalAlreadyVoted,
+        ContractError::ProposalVotingPeriodNotEnded,
+        ContractError::ProposalVotingPeriodEnded,
+        ContractError::ProposalDefeated,
+        ContractError::InvalidProposalDuration,
+        ContractError::UserOptedOut,
+        ContractError::BridgeNotInitialized,
+        ContractError::InvalidChain,
+        ContractError::ChainDisabled,
+        ContractError::NonceAlreadyProcessed,
+        ContractError::InvalidBridgePayload,
+        ContractError::MerkleRootNotSet,
+        ContractError::InvalidMerkleProof,
+        ContractError::TimelockNotReady,
+        ContractError::TimelockOperationNotFound,
+        ContractError::TimelockOperationExists,
+        ContractError::InvalidTimelockDelay,
+        ContractError::TimelockRequired,
+        ContractError::TimelockAlreadyEnabled,
+        ContractError::WrapNotExpired,
+        ContractError::InvalidExpirationDuration,
+        ContractError::TransferFeeNotConfigured,
+        ContractError::InvalidTransfer,
+        ContractError::TransferInProgress,
+        ContractError::StorageInvariantViolation,
+        ContractError::InvalidAdminPubKey,
+        ContractError::InvalidThreshold,
+        ContractError::MerkleProofTooLong,
+        ContractError::TimelockOperationExpired,
+        ContractError::TimelockOperationNotExpired,
+    ];
+
+    /// Numeric code for this variant, matching the `#[repr(u32)]` discriminant.
+    pub const fn code(self) -> u32 {
+        self as u32
+    }
 }

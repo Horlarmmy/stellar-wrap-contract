@@ -77,7 +77,7 @@ fn sign_for_test(
 #[test]
 fn test_zero_hash_mint_failure_leaves_no_guard_entry() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     // ── Setup ─────────────────────────────────────────────────────────────
@@ -86,8 +86,9 @@ fn test_zero_hash_mint_failure_leaves_no_guard_entry() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&admin, &admin_pubkey);
     env.mock_all_auths();
+    env.mock_all_auths();
+    client.initialize(&admin, &admin_pubkey);
 
     let archetype = symbol_short!("arch");
     let period = 202601u64; // valid YYYYMM period
@@ -150,7 +151,7 @@ fn test_zero_hash_mint_failure_leaves_no_guard_entry() {
 #[test]
 fn test_successful_mint_leaves_no_guard_entry() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let signing_key = SigningKey::from_bytes(&[0x60u8; 32]);
@@ -158,8 +159,8 @@ fn test_successful_mint_leaves_no_guard_entry() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&admin, &admin_pubkey);
     env.mock_all_auths();
+    client.initialize(&admin, &admin_pubkey);
 
     let archetype = symbol_short!("arch");
     let period = 202601u64;
@@ -201,7 +202,7 @@ fn test_successful_mint_leaves_no_guard_entry() {
 #[test]
 fn test_duplicate_mint_failure_leaves_no_guard_entry() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarWrapContract);
+    let contract_id = env.register(StellarWrapContract, ());
     let client = StellarWrapContractClient::new(&env, &contract_id);
 
     let signing_key = SigningKey::from_bytes(&[0x61u8; 32]);
@@ -209,8 +210,8 @@ fn test_duplicate_mint_failure_leaves_no_guard_entry() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    client.initialize(&admin, &admin_pubkey);
     env.mock_all_auths();
+    client.initialize(&admin, &admin_pubkey);
 
     let archetype = symbol_short!("arch");
     let period = 202602u64;
@@ -239,7 +240,7 @@ fn test_duplicate_mint_failure_leaves_no_guard_entry() {
         &CURRENT_PAYLOAD_VERSION,
         &sig,
     );
-    assert!(result.is_err(), "duplicate mint must fail");
+    assert!(result.is_err(), "Duplicate mint should fail.");
 
     // No residual guard entry.
     let guard_key = DataKey::MintGuard(user.clone());
