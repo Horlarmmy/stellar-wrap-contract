@@ -688,6 +688,7 @@ Run the test suite with:
 | Test | `cargo test` or `make test` |
 | Fuzz `mint_wrap` | `make fuzz FUZZ_SECONDS=30` |
 | Release build (WASM) | `cargo build --release --target wasm32-unknown-unknown` or `make build` |
+| Optimized deployment artifact | `make wasm-optimize` (requires Stellar CLI; writes `target/wasm32-unknown-unknown/release/stellar_wrap_contract.optimized.wasm`) |
 | Deploy to testnet | `make deploy-testnet` |
 | Docker reproducible build | `make docker-build` or `docker build -t stellar-wrap-contract .` |
 
