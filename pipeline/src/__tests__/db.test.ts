@@ -282,10 +282,11 @@ describe('IndexerDB', () => {
       failed_call: false,
     });
     expect(legacy.getSchemaVersion()).toBe(SCHEMA_VERSION - 1);
-    legacy.close();
 
-    // Reopening runs the forward migration in place and preserves data.
-    const upgraded = await IndexerDB.create();
+    // Reopen with the same underlying db so data persists (in-memory sql.js doesn't survive close).
+    const rawDb = legacy.getRawDb();
+
+    const upgraded = await IndexerDB.create({ _rawDb: rawDb });
     expect(upgraded.getSchemaVersion()).toBe(SCHEMA_VERSION);
     expect(upgraded.getLatestEventLedger(contractId)).toBe(42);
     upgraded.close();
@@ -293,8 +294,9 @@ describe('IndexerDB', () => {
 
   it('refuses to start against a database newer than the code understands', async () => {
     const future = await IndexerDB.create({ schemaVersion: SCHEMA_VERSION + 1 });
-    future.close();
+    expect(future.getSchemaVersion()).toBe(SCHEMA_VERSION + 1);
+    const rawDb = future.getRawDb();
 
-    await expect(IndexerDB.create()).rejects.toThrow(/newer/i);
+    await expect(IndexerDB.create({ _rawDb: rawDb })).rejects.toThrow(/newer/i);
   });
 });

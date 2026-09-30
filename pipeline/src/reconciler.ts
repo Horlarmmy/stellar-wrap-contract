@@ -202,6 +202,20 @@ export function buildIndexerHealth(
 }
 
 /**
+ * Compare two values and push a mismatch string if they differ.
+ */
+function compareFields(
+  field: string,
+  indexed: unknown,
+  onchain: unknown,
+  mismatches: string[],
+): void {
+  if (indexed !== onchain) {
+    mismatches.push(`${field}: indexed=${JSON.stringify(indexed)} onchain=${JSON.stringify(onchain)}`);
+  }
+}
+
+/**
  * Reconcile indexed state against current on-chain storage.
  * Fetches all current storage entries and compares with the database.
  */

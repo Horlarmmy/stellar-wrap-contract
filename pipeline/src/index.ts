@@ -167,7 +167,9 @@ async function main(): Promise<void> {
 
     const cursor = db.getCursor(`cursor:${config.contract_id}`);
     const indexedLedger = cursor ? cursor.last_processed_ledger : 0;
-    const chainHeadLedger = report.onchain.latest_ledger ?? indexedLedger;
+    const chainHeadLedger = report.onchain.total_wraps !== undefined
+      ? await fetcher.getLatestLedger().catch(() => indexedLedger)
+      : indexedLedger;
 
     const drifts = analyzeDrift(report, indexedLedger, chainHeadLedger);
     const divergences = drifts.filter((d) => d.kind === 'divergence');
@@ -244,7 +246,9 @@ async function main(): Promise<void> {
 
     const cursor = db.getCursor(`cursor:${config.contract_id}`);
     const indexedLedger = cursor ? cursor.last_processed_ledger : 0;
-    const chainHeadLedger = report.onchain.latest_ledger ?? indexedLedger;
+    const chainHeadLedger = report.onchain.total_wraps !== undefined
+      ? await fetcher.getLatestLedger().catch(() => indexedLedger)
+      : indexedLedger;
 
     const drifts = analyzeDrift(report, indexedLedger, chainHeadLedger);
     const hasDivergence = drifts.some((d) => d.kind === 'divergence');
@@ -303,7 +307,7 @@ async function main(): Promise<void> {
   let lastProcessedLedger = startLedger - 1;
 
   while (true) {
-    const batch = await fetcher.fetchEvents(startLedger, config.event_page_size);
+    const batch = await fetcher.fetchEvents(startLedger);
 
     if (batch.events.length === 0) {
       await new Promise((resolve) => setTimeout(resolve, config.poll_interval_ms));

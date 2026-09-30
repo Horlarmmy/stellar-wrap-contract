@@ -267,4 +267,7 @@ export interface IndexerConfig {
   start_ledger: number;
   backfill: boolean;
   reconcile_only: boolean;
+  alert_webhook_url: string;
+  alert_min_severity: 'info' | 'warning' | 'critical';
+  expected_admin: string;
 }
