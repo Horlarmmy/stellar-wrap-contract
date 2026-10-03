@@ -62,7 +62,7 @@ pub enum ContractError {
     WrapNotExpired = 46,
     InvalidExpirationDuration = 47,
     // Transfer errors
-    TransferFeeNotConfigured = 48,
+    TransferFeeAlreadyConfigured = 48,
     InvalidTransfer = 49,
     TransferInProgress = 50,
     StorageInvariantViolation = 51,
@@ -73,9 +73,13 @@ pub enum ContractError {
     // Timelock grace period
     TimelockOperationExpired = 55,
     TimelockOperationNotExpired = 56,
+    // Bridge refund state machine errors
+    BridgeRequestNotPending = 57,
+    BridgeRefundDelayNotElapsed = 58,
+    BridgeRequestAlreadyRefunded = 59,
     /// Governance proposal is stale: the admin changed after the proposal was
     /// created, so executing it would revert to a superseded admin (issue #864).
-    StaleProposal = 57,
+    StaleProposal = 60,
 }
 
 impl ContractError {
@@ -84,7 +88,7 @@ impl ContractError {
     /// have not yet been mapped to a producing code path and a failing-path
     /// test. When a variant is added, bump this constant and add the variant
     /// to the `ALL_VARIANTS` table in that test; otherwise CI fails.
-    pub const VARIANT_COUNT: u32 = 57;
+    pub const VARIANT_COUNT: u32 = 60;
 
     /// Every variant in declaration order. The coverage test iterates this
     /// table to assert each variant is reachable and asserted by a test.
@@ -136,7 +140,7 @@ impl ContractError {
         ContractError::TimelockAlreadyEnabled,
         ContractError::WrapNotExpired,
         ContractError::InvalidExpirationDuration,
-        ContractError::TransferFeeNotConfigured,
+        ContractError::TransferFeeAlreadyConfigured,
         ContractError::InvalidTransfer,
         ContractError::TransferInProgress,
         ContractError::StorageInvariantViolation,
@@ -145,6 +149,9 @@ impl ContractError {
         ContractError::MerkleProofTooLong,
         ContractError::TimelockOperationExpired,
         ContractError::TimelockOperationNotExpired,
+        ContractError::BridgeRequestNotPending,
+        ContractError::BridgeRefundDelayNotElapsed,
+        ContractError::BridgeRequestAlreadyRefunded,
         ContractError::StaleProposal,
     ];
 

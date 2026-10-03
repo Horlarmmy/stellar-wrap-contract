@@ -483,3 +483,227 @@ fn test_bridge_wrap_in_mint_and_transfer_invariants() {
         assert_eq!(final_user_periods.len(), 2);
     });
 }
+#[test]
+fn test_bridge_wrap_refund_pending_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, _relayer, signing_key) = setup_test_env(&env);
+
+    let user = Address::generate(&env);
+    let period = 202607u64;
+    let archetype = symbol_short!("arch");
+    let data_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    let sig = sign_mint_payload(
+        &env,
+        &signing_key,
+        &client.address,
+        &user,
+        period,
+        &archetype,
+        &data_hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &data_hash, &1, &sig);
+
+    let dest_chain = 137u32;
+    client.set_chain_status(&dest_chain, &true);
+
+    let recipient = Bytes::from_array(&env, b"0x1234567890abcdef1234567890abcdef12345678");
+    let nonce = client.bridge_wrap_out(&user, &dest_chain, &recipient, &period);
+
+    let request = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request.status, OutboundStatus::Pending);
+
+    client.bridge_wrap_refund(&user, &nonce);
+
+    let request_after = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request_after.status, OutboundStatus::Refunded);
+
+    let wrap = client.get_wrap(&user, &period).expect("wrap exists");
+    assert_eq!(wrap.fsm.state, WrapState::Active);
+}
+
+#[test]
+fn test_bridge_wrap_refund_completed_request_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, _relayer, signing_key) = setup_test_env(&env);
+
+    let user = Address::generate(&env);
+    let period = 202607u64;
+    let archetype = symbol_short!("arch");
+    let data_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    let sig = sign_mint_payload(
+        &env,
+        &signing_key,
+        &client.address,
+        &user,
+        period,
+        &archetype,
+        &data_hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &data_hash, &1, &sig);
+
+    let dest_chain = 137u32;
+    client.set_chain_status(&dest_chain, &true);
+
+    let recipient = Bytes::from_array(&env, b"0x1234567890abcdef1234567890abcdef12345678");
+    let nonce = client.bridge_wrap_out(&user, &dest_chain, &recipient, &period);
+
+    client.bridge_wrap_out_complete(&nonce);
+
+    let request = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request.status, OutboundStatus::Completed);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        client.bridge_wrap_refund(&user, &nonce);
+    }));
+    assert!(result.is_err());
+
+    let request_after = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request_after.status, OutboundStatus::Completed);
+}
+
+#[test]
+fn test_bridge_wrap_refund_double_refund_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, _relayer, signing_key) = setup_test_env(&env);
+
+    let user = Address::generate(&env);
+    let period = 202607u64;
+    let archetype = symbol_short!("arch");
+    let data_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    let sig = sign_mint_payload(
+        &env,
+        &signing_key,
+        &client.address,
+        &user,
+        period,
+        &archetype,
+        &data_hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &data_hash, &1, &sig);
+
+    let dest_chain = 137u32;
+    client.set_chain_status(&dest_chain, &true);
+
+    let recipient = Bytes::from_array(&env, b"0x1234567890abcdef1234567890abcdef12345678");
+    let nonce = client.bridge_wrap_out(&user, &dest_chain, &recipient, &period);
+
+    client.bridge_wrap_refund(&user, &nonce);
+
+    let request = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request.status, OutboundStatus::Refunded);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        client.bridge_wrap_refund(&user, &nonce);
+    }));
+    assert!(result.is_err());
+
+    let request_after = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request_after.status, OutboundStatus::Refunded);
+}
+
+#[test]
+fn test_bridge_wrap_refund_unauthorized_caller_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, _relayer, signing_key) = setup_test_env(&env);
+
+    let user = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let period = 202607u64;
+    let archetype = symbol_short!("arch");
+    let data_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    let sig = sign_mint_payload(
+        &env,
+        &signing_key,
+        &client.address,
+        &user,
+        period,
+        &archetype,
+        &data_hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &data_hash, &1, &sig);
+
+    let dest_chain = 137u32;
+    client.set_chain_status(&dest_chain, &true);
+
+    let recipient = Bytes::from_array(&env, b"0x1234567890abcdef1234567890abcdef12345678");
+    let nonce = client.bridge_wrap_out(&user, &dest_chain, &recipient, &period);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        client.bridge_wrap_refund(&attacker, &nonce);
+    }));
+    assert!(result.is_err());
+
+    let request = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request.status, OutboundStatus::Pending);
+}
+
+#[test]
+fn test_bridge_wrap_refund_immediate_call_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _admin, _relayer, signing_key) = setup_test_env(&env);
+
+    let user = Address::generate(&env);
+    let period = 202607u64;
+    let archetype = symbol_short!("arch");
+    let data_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    let sig = sign_mint_payload(
+        &env,
+        &signing_key,
+        &client.address,
+        &user,
+        period,
+        &archetype,
+        &data_hash,
+    );
+
+    client.mint_wrap(&user, &period, &archetype, &data_hash, &1, &sig);
+
+    let dest_chain = 137u32;
+    client.set_chain_status(&dest_chain, &true);
+
+    let recipient = Bytes::from_array(&env, b"0x1234567890abcdef1234567890abcdef12345678");
+    let nonce = client.bridge_wrap_out(&user, &dest_chain, &recipient, &period);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        client.bridge_wrap_refund(&user, &nonce);
+    }));
+    assert!(result.is_err());
+
+    let request = client
+        .get_outbound_bridge_request(&nonce)
+        .expect("request exists");
+    assert_eq!(request.status, OutboundStatus::Pending);
+}
