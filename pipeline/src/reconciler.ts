@@ -8,12 +8,12 @@ import { DataKeyVariant } from './types';
 
 function compareFields(
   field: string,
-  indexedValue: unknown,
-  onChainValue: unknown,
+  indexed: unknown,
+  onchain: unknown,
   mismatches: string[],
 ): void {
-  if (indexedValue !== onChainValue) {
-    mismatches.push(`${field}: indexed=${String(indexedValue)}, on-chain=${String(onChainValue)}`);
+  if (indexed !== onchain) {
+    mismatches.push(`${field}: indexed=${JSON.stringify(indexed)} onchain=${JSON.stringify(onchain)}`);
   }
 }
 

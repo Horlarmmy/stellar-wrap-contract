@@ -6,7 +6,20 @@ import type {
   LedgerCursorRow,
   StorageEntry,
   WrapState,
+  WrapRecord,
 } from './types';
+
+// Inline only the fields db.ts needs from ReconciliationRun to avoid a circular import.
+interface ReconciliationRunRecord {
+  contract_id: string;
+  ledger_seq: number;
+  indexed_ledger_seq: number;
+  chain_head_ledger: number;
+  genuine_divergence: boolean;
+  affected_counters: string[];
+  is_consistent: boolean;
+  timestamp: string;
+}
 
 /**
  * Current schema version understood by this code. Bump this whenever a
@@ -33,19 +46,27 @@ export class SchemaVersionError extends Error {
 export class IndexerDB {
   private db: SqlJsDatabase;
 
-  constructor(db: SqlJsDatabase) {
+  constructor(db: SqlJsDatabase, skipMigration: boolean = false) {
     this.db = db;
     this.db.run('PRAGMA foreign_keys = ON');
-    this.migrate();
+    if (!skipMigration) {
+      this.migrate();
+    }
   }
 
   static async create(
-    dbPathOrOptions?: string | { schemaVersion?: number },
+    dbPathOrOpts?: string | { schemaVersion?: number; _rawDb?: SqlJsDatabase },
   ): Promise<IndexerDB> {
     const SQL: SqlJsStatic = await initSqlJs();
-    const dbPath = typeof dbPathOrOptions === 'string' ? dbPathOrOptions : undefined;
     let db: SqlJsDatabase;
-    if (dbPath) {
+    const dbPath = typeof dbPathOrOpts === 'string' ? dbPathOrOpts : undefined;
+    const opts = typeof dbPathOrOpts === 'object' ? dbPathOrOpts : undefined;
+    const forcedVersion = opts?.schemaVersion;
+    const rawDb = opts?._rawDb;
+
+    if (rawDb) {
+      db = rawDb;
+    } else if (dbPath) {
       const fs = await import('fs');
       try {
         const buffer = fs.readFileSync(dbPath);
@@ -56,12 +77,26 @@ export class IndexerDB {
     } else {
       db = new SQL.Database();
     }
-    const indexedDb = new IndexerDB(db);
-    if (typeof dbPathOrOptions === 'object' && dbPathOrOptions.schemaVersion !== undefined) {
-      indexedDb.setStoredVersion(dbPathOrOptions.schemaVersion);
-      return new IndexerDB(db);
+
+    if (forcedVersion !== undefined) {
+      // Pre-seed schema_meta and skip migration so the forced version remains.
+      db.run(`CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+      db.run(
+        `INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        [String(forcedVersion)],
+      );
+      const instance = new IndexerDB(db, true);
+      instance['createBaselineSchema']();
+      return instance;
     }
-    return indexedDb;
+
+    return new IndexerDB(db);
+  }
+
+  /** Expose the raw sql.js Database for test scenarios that need to pass it across create() calls. */
+  getRawDb(): SqlJsDatabase {
+    return this.db;
   }
 
   /**
@@ -96,6 +131,21 @@ export class IndexerDB {
 
   getSchemaVersion(): number {
     return this.getStoredVersion();
+  }
+
+  /** Test-only: overwrite the stored schema version without running migrations. */
+  private forceStoredVersion(version: number): void {
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS schema_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+    this.db.run(
+      `INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [String(version)],
+    );
   }
 
   /**
@@ -551,11 +601,11 @@ export class IndexerDB {
       userAliasHashes: new Map(),
       userSlashCounts: new Map(),
       userSlashed: new Map(),
-      admin: contract.admin,
-      adminPubKey: contract.admin_pubkey,
-      pendingAdmin: contract.pending_admin,
+      admin: contract.admin ?? null,
+      adminPubKey: contract.admin_pubkey ?? null,
+      pendingAdmin: contract.pending_admin ?? null,
       migrationVersion: contract.migration_version,
-      paused: Boolean(contract.is_paused),
+      paused: Boolean(contract.is_paused) || contract.is_paused === true,
       totalWrapCount: contract.total_wrap_count,
       totalRevoked: contract.total_revoked,
       storageBytes: contract.storage_bytes,
@@ -598,8 +648,12 @@ export class IndexerDB {
       if (row.latest_period !== null) state.userLatestPeriods.set(user, Number(row.latest_period));
       if (row.alias_hash !== null) state.userAliasHashes.set(user, String(row.alias_hash));
       state.userSlashCounts.set(user, Number(row.slash_count));
-      state.userSlashed.set(user, Boolean(row.is_slashed));
-      state.userPeriods.set(user, JSON.parse(String(row.periods_json)) as number[]);
+      state.userSlashed.set(user, (row.is_slashed as number) === 1 || row.is_slashed === true);
+      try {
+        state.userPeriods.set(user, JSON.parse(String(row.periods_json)) as number[]);
+      } catch {
+        state.userPeriods.set(user, []);
+      }
     }
     return state;
   }

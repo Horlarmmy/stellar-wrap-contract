@@ -167,7 +167,9 @@ async function main(): Promise<void> {
 
     const cursor = db.getCursor(`cursor:${config.contract_id}`);
     const indexedLedger = cursor ? cursor.last_processed_ledger : 0;
-    const chainHeadLedger = report.onchain.latest_ledger ?? indexedLedger;
+    const chainHeadLedger = report.onchain.total_wraps !== undefined
+      ? await fetcher.getLatestLedger().catch(() => indexedLedger)
+      : indexedLedger;
 
     const drifts = analyzeDrift(report, indexedLedger, chainHeadLedger);
     const divergences = drifts.filter((d) => d.kind === 'divergence');
@@ -244,7 +246,9 @@ async function main(): Promise<void> {
 
     const cursor = db.getCursor(`cursor:${config.contract_id}`);
     const indexedLedger = cursor ? cursor.last_processed_ledger : 0;
-    const chainHeadLedger = report.onchain.latest_ledger ?? indexedLedger;
+    const chainHeadLedger = report.onchain.total_wraps !== undefined
+      ? await fetcher.getLatestLedger().catch(() => indexedLedger)
+      : indexedLedger;
 
     const drifts = analyzeDrift(report, indexedLedger, chainHeadLedger);
     const hasDivergence = drifts.some((d) => d.kind === 'divergence');

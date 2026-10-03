@@ -511,17 +511,41 @@ export function persistStateToDB(
 }
 
 export function processEventBatch(
-  state: DerivedState,
-  events: ContractEvent[],
+  stateOrDb: DerivedState | IndexerDB,
+  eventsOrState: ContractEvent[] | DerivedState,
+  maybeEvents?: ContractEvent[],
 ): { state: DerivedState; processed: number } {
-  const seen = new Set<string>();
-  let processed = 0;
-  for (const event of events) {
-    if (event.failed_call || seen.has(event.id)) continue;
-    seen.add(event.id);
-    applyEventToState(state, classifyEvent(event));
-    processed += 1;
+  let db: IndexerDB | undefined;
+  let state: DerivedState;
+  let events: ContractEvent[];
+
+  if (Array.isArray(eventsOrState)) {
+    // (state, events) — used by live indexer
+    state = stateOrDb as DerivedState;
+    events = eventsOrState;
+  } else {
+    // (db, state, events) — used by backfill/reconciler
+    db = stateOrDb as IndexerDB;
+    state = eventsOrState as DerivedState;
+    events = maybeEvents!;
   }
-  state.ledger_seq = events.reduce((max, event) => Math.max(max, event.ledger), state.ledger_seq);
+
+  let processed = 0;
+
+  for (const event of events) {
+    if (event.failed_call) continue;
+    const typed = classifyEvent(event);
+    applyEventToState(state, typed);
+    processed++;
+  }
+
+  state.ledger_seq = events.length > 0
+    ? events[events.length - 1].ledger
+    : state.ledger_seq;
+
+  if (db) {
+    persistStateToDB(db, state, state.contract_id, state.ledger_seq, events);
+  }
+
   return { state, processed };
 }
