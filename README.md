@@ -120,6 +120,7 @@ The following table documents which state-mutating entrypoints honor the pause (
 | `upgrade(new_wasm_hash)` | admin |
 | `renew_all_ttls(user)` | admin |
 | `extend_ttl(user, period)` | anyone |
+| `extend_ttl_batch(user, periods)` | anyone |
 | `set_transfer_fee(token, recipient, amount)` | admin |
 | `clear_transfer_fee()` | admin |
 | `get_transfer_fee()` | — |
