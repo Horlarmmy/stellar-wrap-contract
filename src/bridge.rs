@@ -254,6 +254,7 @@ pub(crate) fn bridge_wrap_in(
                 period,
                 &archetype,
                 &data_hash,
+                crate::signature::INBOUND_BRIDGE_SCHEME_VERSION,
                 &sig,
             )
             .is_ok()
