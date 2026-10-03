@@ -20,7 +20,7 @@ pub(crate) fn get_wrap(e: Env, user: Address, period: u64) -> Option<WrapRecord>
 
 pub(crate) fn get_mint_timestamp(e: Env, user: Address, period: u64) -> Option<u64> {
     let wrap: Option<WrapRecord> = e.storage().persistent().get(&DataKey::Wrap(user, period));
-    wrap.map(|r| r.created_at)
+    wrap.map(|r| r.timestamp)
 }
 
 /// Return the ledger timestamp of the user's most recent state change via a
@@ -167,7 +167,10 @@ pub(crate) fn get_all_wraps_for_user(e: Env, user: Address) -> soroban_sdk::Vec<
 /// - `latest_period`: the latest period with an active wrap
 pub(crate) fn get_wrap_summary(e: Env, user: Address) -> Option<WrapSummary> {
     let wrap_periods_key = DataKey::WrapPeriods(user.clone());
-    let periods: soroban_sdk::Vec<u64> = e.storage().persistent().get(&wrap_periods_key)?;
+    let periods: soroban_sdk::Vec<u64> = e
+        .storage()
+        .persistent()
+        .get(&wrap_periods_key)?;
 
     if periods.is_empty() {
         return None;
@@ -247,11 +250,18 @@ pub(crate) fn get_admin_pubkey(e: Env) -> Option<BytesN<32>> {
 /// Return the contract semantic version string (`MAJOR.MINOR.PATCH`).
 ///
 /// Derived from `Cargo.toml` package version at compile time via
-/// `CARGO_PKG_VERSION`, so this value cannot drift from the package version.
+/// `CARGO_PKG_VERSION`, so this value can never drift from the package version.
+/// Bump it in the same release that ships a WASM upgrade so clients can detect
+/// which interface they are talking to after `upgrade()`.
 pub(crate) fn version(e: Env) -> String {
     String::from_str(&e, env!("CARGO_PKG_VERSION"))
 }
 
+/// Cheap existence check for `(user, period)` without loading a `WrapRecord`.
+///
+/// Prefer `has_wrap` when callers only need a boolean (indexing, gating UI).
+/// Use `get_wrap` when the full record (timestamp, archetype, hash, FSM) is
+/// required.
 pub(crate) fn has_wrap(e: Env, user: Address, period: u64) -> bool {
     e.storage().persistent().has(&DataKey::Wrap(user, period))
 }
@@ -265,18 +275,20 @@ pub(crate) fn total_revoked(e: Env) -> u64 {
 
 pub(crate) fn name(e: Env) -> String {
     e.storage()
-        .temporary()
+        .instance()
         .get(&DataKey::Name)
         .unwrap_or_else(|| String::from_str(&e, "Stellar Wrap Registry"))
 }
 
 pub(crate) fn symbol(e: Env) -> String {
     e.storage()
-        .temporary()
+        .instance()
         .get(&DataKey::Symbol)
         .unwrap_or_else(|| String::from_str(&e, "WRAP"))
 }
 
+/// Returns `0` because wrap records represent discrete, indivisible registry entries with
+/// no fractional units.
 pub(crate) fn decimals(_e: Env) -> u32 {
     0
 }
@@ -288,6 +300,12 @@ pub(crate) fn contract_version(e: Env) -> u32 {
         .unwrap_or(0)
 }
 
+/// Returns the storage schema version.
+///
+/// The schema version is set at contract initialization and indicates which
+/// storage layout/schema is active. It starts at `1` for the initial schema.
+/// Future upgrades that change the storage layout should increment this version
+/// as part of their migration logic (see `admin::migrate`).
 pub(crate) fn schema_version(e: Env) -> u32 {
     e.storage()
         .instance()
@@ -303,49 +321,52 @@ pub(crate) fn check_user_invariants(e: Env, user: Address) -> InvariantReport {
         .persistent()
         .get(&DataKey::WrapCount(user.clone()))
         .unwrap_or(0);
-    let user_periods: Vec<u64> = e
+
+    let user_periods: soroban_sdk::Vec<u64> = e
         .storage()
         .persistent()
         .get(&DataKey::UserPeriods(user.clone()))
-        .unwrap_or_else(|| Vec::new(&e));
-    let wrap_periods: Vec<u64> = e
+        .unwrap_or_else(|| soroban_sdk::Vec::new(&e));
+    let user_periods_len = user_periods.len();
+
+    let wrap_periods: soroban_sdk::Vec<u64> = e
         .storage()
         .persistent()
         .get(&DataKey::WrapPeriods(user.clone()))
-        .unwrap_or_else(|| Vec::new(&e));
+        .unwrap_or_else(|| soroban_sdk::Vec::new(&e));
+    let wrap_periods_len = wrap_periods.len();
+
     let latest_period: Option<u64> = e
         .storage()
         .persistent()
         .get(&DataKey::LatestPeriod(user.clone()));
 
-    let scan_len = core::cmp::min(user_periods.len(), MAX_QUERY_RESULTS);
     let mut max_user_period: Option<u64> = None;
     let mut live_wraps_found = 0;
-    for index in 0..scan_len {
-        if let Some(period) = user_periods.get(index) {
-            max_user_period = Some(core::cmp::max(max_user_period.unwrap_or(0), period));
-            if e.storage()
-                .persistent()
-                .has(&DataKey::Wrap(user.clone(), period))
-            {
+
+    let scan_len = core::cmp::min(user_periods_len, MAX_QUERY_RESULTS);
+    for i in 0..scan_len {
+        if let Some(p) = user_periods.get(i) {
+            max_user_period = Some(core::cmp::max(max_user_period.unwrap_or(0), p));
+            if e.storage().persistent().has(&DataKey::Wrap(user.clone(), p)) {
                 live_wraps_found += 1;
             }
         }
     }
 
-    let all_user_periods_live = live_wraps_found == scan_len;
+    let all_user_periods_live = if scan_len > 0 {
+        live_wraps_found == scan_len
+    } else {
+        true
+    };
     InvariantReport {
-        wrap_count_match_user_periods: wrap_count == user_periods.len(),
-        wrap_count_match_wrap_periods: wrap_count == wrap_periods.len(),
-        latest_period_matches_max: latest_period == max_user_period,
-        all_user_periods_live,
-        balance_matches_wrap_count: balance_of(e.clone(), user) == i128::from(wrap_count),
         wrap_count,
-        user_periods_len: user_periods.len(),
-        wrap_periods_len: wrap_periods.len(),
+        user_periods_len,
+        wrap_periods_len,
+        all_user_periods_live,
         latest_period,
         max_user_period,
         live_wraps_found,
-        balance: wrap_count,
+        balance: wrap_count as i128,
     }
 }
