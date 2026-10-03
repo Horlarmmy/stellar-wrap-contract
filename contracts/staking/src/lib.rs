@@ -122,6 +122,35 @@ impl StellarWrapQueries for StakingContract {
 
 #[contractimpl]
 impl StakingContract {
+    /// Return the token symbol for the staking contract.
+    ///
+    /// This is the human-readable ticker used to identify the staking token
+    /// in wallets and explorers. It is a fixed, contract-defined constant and
+    /// does not depend on any stored state, so it can be called at any time,
+    /// including while the contract is paused.
+    ///
+    /// # Returns
+    ///
+    /// The token symbol as a `soroban_sdk::Symbol`.
+    pub fn symbol(env: Env) -> soroban_sdk::Symbol {
+        soroban_sdk::Symbol::new(&env, "STK")
+    }
+
+    /// Return the number of decimals used by the staking token.
+    ///
+    /// This is the fixed precision applied to every amount handled by the
+    /// contract (for example, a value of `7` means one whole token is
+    /// represented as `10_000_000` base units). It is a contract-defined
+    /// constant and does not depend on any stored state, so it can be called
+    /// at any time, including while the contract is paused.
+    ///
+    /// # Returns
+    ///
+    /// The number of decimals as a `u32`.
+    pub fn decimals(_env: Env) -> u32 {
+        7
+    }
+
     /// Pause or unpause the contract.
     pub fn set_paused(env: Env, paused: bool) {
         env.storage().instance().set(&DataKey::Paused, &paused);
@@ -241,6 +270,65 @@ impl StakingContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::
+    use soroban_sdk::testutils::Address as _;
 
-/* … truncated 406 chars — edit only what you need near the top … */
+    #[test]
+    fn stake_rejects_zero() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+        let user = Address::generate(&env);
+
+        assert_eq!(client.stake(&user, &0), Err(ContractError::InvalidAmount));
+    }
+
+    #[test]
+    fn stake_rejects_negative() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+        let user = Address::generate(&env);
+
+        assert_eq!(client.stake(&user, &-1), Err(ContractError::InvalidAmount));
+        assert_eq!(client.stake(&user, &i128::MIN), Err(ContractError::InvalidAmount));
+    }
+
+    #[test]
+    fn stake_accepts_i128_max() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+        let user = Address::generate(&env);
+
+        assert_eq!(client.stake(&user, &i128::MAX), Ok(()));
+        assert_eq!(client.total_staked(), i128::MAX);
+    }
+
+    #[test]
+    fn get_admin_returns_none_when_unset() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+
+        assert_eq!(client.get_admin(), None);
+    }
+
+    #[test]
+    fn symbol_returns_stk() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+        assert_eq!(client.symbol(), soroban_sdk::Symbol::new(&env, "STK"));
+    }
+
+    #[test]
+    fn decimals_returns_7() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, StakingContract);
+        let client = StakingContractClient::new(&env, &contract_id);
+        assert_eq!(client.decimals(), 7);
+    }
+}
