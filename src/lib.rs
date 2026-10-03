@@ -982,6 +982,10 @@ mod security_test;
 #[cfg(test)]
 mod stake_test;
 #[cfg(test)]
+mod invariants_test;
+#[cfg(test)]
+mod storage_invariants_test;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod test_utils;

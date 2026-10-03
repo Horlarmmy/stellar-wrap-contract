@@ -22,6 +22,7 @@
 // [`opt_in`] call `user.require_auth()`, so a caller can only set or clear
 // their own flag — opt-out cannot be set on another user's behalf.
 
+use soroban_sdk::{panic_with_error, Address, Env};
 use soroban_sdk::{address, panic_with_error, Env};
 
 use crate::{ContractError, DataKey};
